@@ -1,0 +1,575 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================
+// الشركات المشتركة (Multi-Tenant)
+// =============================
+
+model Tenant {
+  id                String           @id @default(uuid())
+  name              String
+  logo              String?
+  plan              SubscriptionPlan @default(TRIAL)
+  planStatus        PlanStatus       @default(TRIAL)
+  stripeCustomerId  String?          @unique
+  trialEndsAt       DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  branches          Branch[]
+  departments       Department[]
+  jobTitles         JobTitle[]
+  employees         Employee[]
+  shifts            Shift[]
+  leaveTypes        LeaveType[]
+  publicHolidays    PublicHoliday[]
+  payrollRuns       PayrollRun[]
+  roles             Role[]
+  subscriptions     Subscription[]
+  rotationPlans     RotationPlan[]
+
+  @@map("tenants")
+}
+
+enum SubscriptionPlan {
+  TRIAL
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum PlanStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+// =============================
+// الاشتراكات
+// =============================
+
+model Subscription {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  stripeSubscriptionId String  @unique
+  plan                SubscriptionPlan
+  status              String
+  currentPeriodStart  DateTime
+  currentPeriodEnd    DateTime
+  cancelAtPeriodEnd   Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant              Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("subscriptions")
+}
+
+// =============================
+// الفروع
+// =============================
+
+model Branch {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  location  String?
+  timezone  String   @default("Asia/Riyadh")
+  createdAt DateTime @default(now())
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  employees   Employee[]
+  shifts      Shift[]
+  departments Department[]
+
+  @@map("branches")
+}
+
+// =============================
+// الهيكل التنظيمي
+// =============================
+
+model Department {
+  id        String  @id @default(uuid())
+  tenantId  String
+  branchId  String?        // الفرع المرتبط (اختياري)
+  name      String
+  parentId  String?
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+  branch    Branch?      @relation(fields: [branchId], references: [id])
+  parent    Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children  Department[] @relation("DeptHierarchy")
+  employees Employee[]
+
+  @@map("departments")
+}
+
+model JobTitle {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  grade       String?
+  baseSalary  Decimal  @default(0) @db.Decimal(10, 2)
+
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  employees   Employee[]
+
+  @@map("job_titles")
+}
+
+// =============================
+// الموظفون
+// =============================
+
+model Employee {
+  id             String         @id @default(uuid())
+  tenantId       String
+  branchId       String
+  departmentId   String?
+  jobTitleId     String?
+  employeeCode   String
+  fullName         String         // الاسم المركب (يُحسب تلقائياً)
+  firstName        String?        // الاسم الأول
+  fatherName       String?        // اسم الأب
+  grandfatherName  String?        // اسم الجد
+  familyName       String?        // اللقب / اسم العائلة
+  nationalId     String?
+  idExpiryDate   DateTime?      // تاريخ انتهاء الهوية
+  nationality    String?        // الجنسية
+  birthDate      DateTime?      // تاريخ الميلاد
+  qualification  String?        // المؤهل الدراسي
+  specialization String?        // التخصص
+  iban           String?        // رقم الحساب البنكي IBAN
+  photo          String?        // مسار صورة الموظف
+  hireDate       DateTime
+  status         EmployeeStatus @default(ACTIVE)
+  email          String?
+  phone          String?
+  passwordHash   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  branch          Branch            @relation(fields: [branchId], references: [id])
+  department      Department?       @relation(fields: [departmentId], references: [id])
+  jobTitle        JobTitle?         @relation(fields: [jobTitleId], references: [id])
+  salaryComponents SalaryComponent[]
+  leaveBalances   LeaveBalance[]
+  leaveRequests   LeaveRequest[]
+  attendanceLogs  AttendanceLog[]
+  employeeShifts  EmployeeShift[]
+  custodyItems    CustodyItem[]
+  employeeRoles   EmployeeRole[]
+  payrollDetails  PayrollDetail[]
+  permissionLogs  PermissionLog[]
+  uniformRequests UniformRequest[]
+  rotationMemberships RotationGroupMember[]
+
+  @@unique([tenantId, employeeCode])
+  @@map("employees")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+// =============================
+// الرواتب والبدلات
+// =============================
+
+model SalaryComponent {
+  id            String              @id @default(uuid())
+  tenantId      String
+  employeeId    String
+  type          SalaryComponentType
+  name          String
+  amount        Decimal             @db.Decimal(10, 2)
+  isPercentage  Boolean             @default(false)
+  effectiveDate DateTime
+
+  employee      Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("salary_components")
+}
+
+enum SalaryComponentType {
+  BASE
+  ALLOWANCE
+  DEDUCTION
+}
+
+// =============================
+// الإجازات
+// =============================
+
+model LeaveType {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  name                String
+  description         String?
+  maxDays             Int
+  maxDaysHalfPay      Int?     // للإجازة المرضية: أيام بنصف الراتب
+  maxDaysUnpaid       Int?     // للإجازة المرضية: أيام بدون راتب
+  requiresApproval    Boolean  @default(true)
+  color               String?
+  isSystemDefault     Boolean  @default(false)
+
+  // ── قواعد الاحتساب التلقائي ──
+  // FIXED | SENIORITY_BASED | SICK_TIERED | ONCE_PER_EMPLOYMENT | PER_EVENT
+  calculationType     String   @default("FIXED")
+  minDays             Int?     // SENIORITY_BASED: أيام قبل بلوغ عتبة الأقدمية
+  seniorityThreshold  Int?     // SENIORITY_BASED: عدد سنوات الخدمة للعتبة (مثلاً 5)
+
+  tenant          Tenant         @relation(fields: [tenantId], references: [id])
+  leaveBalances   LeaveBalance[]
+  leaveRequests   LeaveRequest[]
+
+  @@map("leave_types")
+}
+
+model LeaveBalance {
+  id           String @id @default(uuid())
+  tenantId     String
+  employeeId   String
+  leaveTypeId  String
+  year         Int
+  entitledDays Int
+  usedDays     Int    @default(0)
+
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  leaveType    LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@map("leave_balances")
+}
+
+model LeaveRequest {
+  id          String        @id @default(uuid())
+  tenantId    String
+  employeeId  String
+  leaveTypeId String
+  startDate   DateTime
+  endDate     DateTime
+  status      RequestStatus @default(PENDING)
+  approvedBy  String?
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@map("leave_requests")
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// =============================
+// الشفتات والحضور
+// =============================
+
+model Shift {
+  id           String   @id @default(uuid())
+  tenantId     String
+  branchId     String
+  name         String
+  startTime    String
+  endTime      String
+  breakMinutes Int      @default(0)
+  isNightShift Boolean  @default(false)
+  workingDays  Int[]
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  branch          Branch          @relation(fields: [branchId], references: [id])
+  employeeShifts  EmployeeShift[]
+
+  @@map("shifts")
+}
+
+model EmployeeShift {
+  id            String    @id @default(uuid())
+  tenantId      String
+  employeeId    String
+  shiftId       String
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+
+  employee      Employee  @relation(fields: [employeeId], references: [id])
+  shift         Shift     @relation(fields: [shiftId], references: [id])
+
+  @@map("employee_shifts")
+}
+
+// =============================
+// خطط تدوير الشفتات
+// =============================
+
+model RotationPlan {
+  id              String   @id @default(uuid())
+  tenantId        String
+  name            String
+  shiftIds        String[]                          // ترتيب الشفتات في الدورة
+  rotateEveryDays Int      @default(3)              // قلب الشفت كل N أيام
+  restMode        String   @default("AT_ROTATION")  // AT_ROTATION: راحة عند القلبة | WEEKLY: راحة أسبوعية
+  restDays        Int      @default(1)              // عدد أيام الراحة عند القلبة
+  weeklyRestDays  Int[]    @default([])             // أيام الراحة الأسبوعية (0=الأحد .. 6=السبت)
+  startDate       DateTime
+  createdAt       DateTime @default(now())
+
+  tenant Tenant          @relation(fields: [tenantId], references: [id])
+  groups RotationGroup[]
+
+  @@map("rotation_plans")
+}
+
+model RotationGroup {
+  id     String @id @default(uuid())
+  planId String
+  name   String
+  order  Int    @default(0)
+
+  plan    RotationPlan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  members RotationGroupMember[]
+
+  @@map("rotation_groups")
+}
+
+model RotationGroupMember {
+  id         String @id @default(uuid())
+  groupId    String
+  employeeId String
+
+  group    RotationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  employee Employee      @relation(fields: [employeeId], references: [id])
+
+  @@unique([groupId, employeeId])
+  @@map("rotation_group_members")
+}
+
+model AttendanceLog {
+  id             String           @id @default(uuid())
+  tenantId       String
+  employeeId     String
+  date           DateTime         @db.Date
+  checkIn        DateTime?
+  checkOut       DateTime?
+  source         AttendanceSource @default(MANUAL)
+  status         AttendanceStatus @default(PRESENT)
+  lateMinutes    Int              @default(0)
+  overtimeMinutes Int             @default(0)
+  approvedBy     String?
+  notes          String?
+  createdAt      DateTime         @default(now())
+
+  employee       Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@map("attendance_logs")
+}
+
+enum AttendanceSource {
+  BIOMETRIC
+  MANUAL
+  SUPERVISOR
+  SELF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+  HOLIDAY
+  WEEKEND
+}
+
+model PermissionLog {
+  id          String            @id @default(uuid())
+  tenantId    String
+  employeeId  String
+  date        DateTime          @db.Date
+  type        PermissionType
+  durationMin Int
+  reason      String?
+  status      RequestStatus     @default(PENDING)
+  approvedBy  String?
+
+  employee    Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("permission_logs")
+}
+
+enum PermissionType {
+  START
+  DURING
+  END
+}
+
+model PublicHoliday {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  date        DateTime @db.Date
+  isRecurring Boolean  @default(false)
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("public_holidays")
+}
+
+// =============================
+// العهد
+// =============================
+
+model CustodyItem {
+  id           String    @id @default(uuid())
+  tenantId     String
+  employeeId   String
+  itemName     String
+  assignedDate DateTime
+  returnedDate DateTime?
+  status       String    @default("active")
+
+  employee     Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("custody_items")
+}
+
+// =============================
+// مسير الرواتب
+// =============================
+
+model PayrollRun {
+  id           String        @id @default(uuid())
+  tenantId     String
+  month        Int
+  year         Int
+  status       PayrollStatus @default(DRAFT)
+  totalAmount  Decimal       @default(0) @db.Decimal(12, 2)
+  approvedBy   String?
+  approvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id])
+  details      PayrollDetail[]
+
+  @@unique([tenantId, month, year])
+  @@map("payroll_runs")
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+model PayrollDetail {
+  id               String @id @default(uuid())
+  payrollRunId     String
+  employeeId       String
+  baseSalary       Decimal @db.Decimal(10, 2)
+  totalAllowances  Decimal @db.Decimal(10, 2)
+  totalDeductions  Decimal @db.Decimal(10, 2)
+  absenceDeduction Decimal @db.Decimal(10, 2)
+  lateDeduction    Decimal @db.Decimal(10, 2)
+  netSalary        Decimal @db.Decimal(10, 2)
+  workingDays      Int
+  absentDays       Int
+
+  payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id])
+  employee         Employee   @relation(fields: [employeeId], references: [id])
+
+  @@map("payroll_details")
+}
+
+// =============================
+// الصلاحيات
+// =============================
+
+model Role {
+  id        String @id @default(uuid())
+  tenantId  String
+  name      String
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  permissions   Permission[]
+  employeeRoles EmployeeRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id      String @id @default(uuid())
+  roleId  String
+  module  String
+  action  String
+
+  role    Role @relation(fields: [roleId], references: [id])
+
+  @@map("permissions")
+}
+
+model EmployeeRole {
+  id         String @id @default(uuid())
+  employeeId String
+  roleId     String
+
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  role       Role     @relation(fields: [roleId], references: [id])
+
+  @@unique([employeeId, roleId])
+  @@map("employee_roles")
+}
+
+// =============================
+// طلبات بدلة العمل
+// =============================
+
+model UniformRequest {
+  id          String        @id @default(uuid())
+  tenantId    String
+  employeeId  String
+  uniformType String
+  size        String?
+  quantity    Int           @default(1)
+  status      RequestStatus @default(PENDING)
+  notes       String?
+  approvedBy  String?
+  createdAt   DateTime      @default(now())
+
+  employee    Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("uniform_requests")
+}
+
+// =============================
+// سجل التدقيق (Audit Log)
+// =============================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  employeeId String?
+  action     String
+  module     String
+  entityId   String?
+  oldData    Json?
+  newData    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
