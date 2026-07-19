@@ -1,5 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { prisma } from '@shift-saas/database'
+import { ApprovalsService } from '../approvals/approvals.service'
+import { isManager } from '../../common/auth.util'
+import { JwtPayload } from '@shift-saas/types'
 import {
   CreateLeaveTypeDto, UpdateLeaveTypeDto,
   AutoAssignBalancesDto,
@@ -94,6 +97,7 @@ const SAUDI_LABOR_DEFAULTS = [
 
 @Injectable()
 export class LeavesService {
+  constructor(private approvals: ApprovalsService) {}
 
   // ── أنواع الإجازات ─────────────────────────────────────────────────
   async getLeaveTypes(tenantId: string) {
@@ -306,7 +310,7 @@ export class LeavesService {
     const remaining = balance.entitledDays - balance.usedDays
     if (days > remaining) throw new BadRequestException(`الرصيد المتاح ${remaining} يوم فقط`)
 
-    return prisma.leaveRequest.create({
+    const req = await prisma.leaveRequest.create({
       data: {
         tenantId, employeeId,
         leaveTypeId: dto.leaveTypeId,
@@ -315,24 +319,53 @@ export class LeavesService {
         status: 'PENDING',
       },
     })
+
+    // أنشئ حالة اعتماد إن كان للشركة مسار مُهيّأ لطلبات الإجازات
+    const kase = await this.approvals.createCase(tenantId, 'LEAVE', req.id, employeeId)
+    // لا يوجد مسار مُهيّأ — تبقى الحالة PENDING وتُعتمد مباشرة عبر approveRequest (سلوك متوافق مع الإصدارات السابقة)
+    if (kase && kase.caseStatus === 'APPROVED') {
+      // كل الخطوات جرى تخطّيها تلقائياً (لا يوجد موافق مؤهّل) — اعتماد فوري
+      return this.finalizeApproval(req, undefined)
+    }
+    return req
   }
 
-  async approveRequest(tenantId: string, requestId: string, approverId: string, dto: ApproveLeaveDto) {
+  /** تنفيذ أثر الاعتماد الفعلي: خصم الرصيد وتحديث الحالة — مشترك بين المسار القديم والمحرّك الجديد */
+  private async finalizeApproval(req: { id: string; employeeId: string; leaveTypeId: string; startDate: Date; endDate: Date }, approverId?: string) {
+    const days = Math.ceil((req.endDate.getTime() - req.startDate.getTime()) / 86400000) + 1
+    await prisma.leaveBalance.updateMany({
+      where: { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, year: req.startDate.getFullYear() },
+      data:  { usedDays: { increment: days } },
+    })
+    return prisma.leaveRequest.update({
+      where: { id: req.id },
+      data:  { status: 'APPROVED', approvedBy: approverId },
+    })
+  }
+
+  async approveRequest(tenantId: string, requestId: string, actor: JwtPayload, dto: ApproveLeaveDto) {
     const req = await prisma.leaveRequest.findFirst({ where: { id: requestId, tenantId } })
     if (!req) throw new NotFoundException('الطلب غير موجود')
     if (req.status !== 'PENDING') throw new BadRequestException('تم البت في هذا الطلب مسبقاً')
 
-    if (dto.status === 'APPROVED') {
-      const days = Math.ceil((req.endDate.getTime() - req.startDate.getTime()) / 86400000) + 1
-      await prisma.leaveBalance.updateMany({
-        where: { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, year: req.startDate.getFullYear() },
-        data:  { usedDays: { increment: days } },
-      })
+    const trail = await this.approvals.getTrail('LEAVE', requestId)
+    if (trail) {
+      // مسار اعتماد متعدّد الخطوات — الأهلية محسوبة ديناميكياً (قد يكون الموافق رئيس قسم بدور موظف عادي)
+      // approvals.decide يرمي ForbiddenException إن لم يكن actor.sub موافقاً مؤهّلاً للخطوة الحالية
+      const result = await this.approvals.decide(tenantId, 'LEAVE', requestId, actor.sub, dto.status, dto.notes)
+      if (result.caseStatus === 'REJECTED') {
+        return prisma.leaveRequest.update({ where: { id: requestId }, data: { status: 'REJECTED', approvedBy: actor.sub } })
+      }
+      if (result.caseStatus === 'APPROVED') {
+        return this.finalizeApproval(req, actor.sub)
+      }
+      // ما زال بانتظار خطوة لاحقة — لا نغيّر حالة الطلب الظاهرة بعد
+      return { ...req, pendingStep: result.currentStepLabel }
     }
 
-    return prisma.leaveRequest.update({
-      where: { id: requestId },
-      data:  { status: dto.status, approvedBy: approverId },
-    })
+    // بلا مسار مُهيّأ — اعتماد مباشر مقيّد بأدوار الإدارة (سلوك احتياطي متوافق مع الإصدارات السابقة)
+    if (!isManager(actor)) throw new ForbiddenException('ليس لديك صلاحية اعتماد طلبات الإجازة')
+    if (dto.status === 'APPROVED') return this.finalizeApproval(req, actor.sub)
+    return prisma.leaveRequest.update({ where: { id: requestId }, data: { status: 'REJECTED', approvedBy: actor.sub } })
   }
 }

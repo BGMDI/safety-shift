@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { getRoles } from '../../lib/auth'
+import { ThemeToggle } from './theme-toggle'
 
 type Access = 'all' | 'mgmt' | 'hr' | 'super'
 
@@ -23,6 +24,7 @@ const navGroups: NavGroup[] = [
       { href: '/employees',   label: 'الموظفون',         icon: '👥', access: 'mgmt' },
       { href: '/departments', label: 'الهيكل التنظيمي', icon: '🏢', access: 'mgmt' },
       { href: '/leaves',      label: 'الإجازات',          icon: '🌴', access: 'mgmt' },
+      { href: '/onboarding',  label: 'المباشرات',         icon: '🚪', access: 'mgmt' },
       { href: '/custody',     label: 'العهد وإخلاء الطرف', icon: '📦', access: 'mgmt' },
       { href: '/uniforms',    label: 'بدلة العمل',         icon: '👔', access: 'mgmt' },
     ],
@@ -43,9 +45,10 @@ const navGroups: NavGroup[] = [
   {
     label: 'الإعدادات',
     items: [
-      { href: '/roles',    label: 'الصلاحيات',    icon: '🔑', access: 'super' },
-      { href: '/audit',    label: 'سجل التدقيق',  icon: '📜', access: 'hr' },
-      { href: '/settings', label: 'الإعدادات',    icon: '⚙️', access: 'mgmt' },
+      { href: '/roles',     label: 'الصلاحيات',      icon: '🔑', access: 'super' },
+      { href: '/approvals', label: 'مسار الاعتماد', icon: '✅', access: 'hr' },
+      { href: '/audit',     label: 'سجل التدقيق',    icon: '📜', access: 'hr' },
+      { href: '/settings',  label: 'الإعدادات',      icon: '⚙️', access: 'mgmt' },
     ],
   },
 ]
@@ -75,42 +78,62 @@ export function Sidebar() {
   const isEmployee = roles.length === 0 || !roles.some(r => ['super_admin', 'hr_manager', 'supervisor'].includes(r))
 
   return (
-    <aside className="w-64 min-h-screen bg-gray-900 text-white flex flex-col">
-      <div className="p-5 border-b border-gray-700">
-        <h2 className="text-lg font-bold">نظام الشفتات</h2>
-        <p className="text-gray-400 text-xs mt-0.5">
-          {isEmployee ? 'الخدمة الذاتية للموظف' : 'إدارة الموارد البشرية'}
-        </p>
+    <aside className="w-64 min-h-screen flex flex-col flex-shrink-0"
+      style={{ background: 'linear-gradient(180deg, var(--brand-2), #0A1F1B 70%)', color: '#E7EEEB' }}>
+      <div className="p-5 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center"
+          style={{ background: 'rgba(255,255,255,.1)' }}>
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/>
+          </svg>
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-sm font-bold truncate">نظام الشِّفتات</h2>
+          <p className="text-xs mt-0.5 truncate" style={{ color: 'rgba(231,238,235,.55)' }}>
+            {isEmployee ? 'الخدمة الذاتية للموظف' : 'إدارة الموارد البشرية'}
+          </p>
+        </div>
       </div>
 
       <nav className="flex-1 p-3 overflow-y-auto space-y-4">
         {groups.map(group => (
           <div key={group.label}>
-            <p className="text-gray-500 text-xs font-semibold uppercase px-3 mb-1">{group.label}</p>
+            <p className="text-xs font-semibold uppercase px-3 mb-1 tracking-wide" style={{ color: 'rgba(231,238,235,.4)' }}>{group.label}</p>
             <div className="space-y-0.5">
-              {group.items.map(item => (
-                <Link key={item.href} href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
-                    pathname === item.href
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                  }`}>
-                  <span className="text-base">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-              ))}
+              {group.items.map(item => {
+                const active = pathname === item.href
+                return (
+                  <Link key={item.href} href={item.href}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm"
+                    style={active
+                      ? { background: 'var(--brand)', color: '#fff', fontWeight: 600 }
+                      : { color: 'rgba(231,238,235,.75)' }}
+                    onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,.06)' }}
+                    onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
+                    <span className="text-base">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
             </div>
           </div>
         ))}
       </nav>
 
-      <div className="p-4 border-t border-gray-700">
+      <div className="p-4 flex items-center gap-2" style={{ borderTop: '1px solid rgba(255,255,255,.08)' }}>
         <button
           onClick={() => { localStorage.removeItem('access_token'); localStorage.removeItem('refresh_token'); window.location.href = '/login' }}
-          className="w-full text-right text-gray-400 text-sm hover:text-red-400 transition px-3 py-2 rounded-lg hover:bg-gray-800"
+          className="flex-1 text-right text-sm transition px-3 py-2 rounded-lg"
+          style={{ color: 'rgba(231,238,235,.55)' }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#DE6577'; e.currentTarget.style.background = 'rgba(255,255,255,.06)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'rgba(231,238,235,.55)'; e.currentTarget.style.background = 'transparent' }}
         >
           🚪 تسجيل الخروج
         </button>
+        <ThemeToggle
+          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition"
+          style={{ background: 'rgba(255,255,255,.08)', color: 'rgba(231,238,235,.85)' }}
+        />
       </div>
     </aside>
   )

@@ -18,6 +18,8 @@ import { TenantsModule } from './modules/tenants/tenants.module'
 import { RolesModule } from './modules/roles/roles.module'
 import { AuditModule } from './modules/audit/audit.module'
 import { RotationsModule } from './modules/rotations/rotations.module'
+import { ApprovalsModule } from './modules/approvals/approvals.module'
+import { OnboardingModule } from './modules/onboarding/onboarding.module'
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { RotationsModule } from './modules/rotations/rotations.module'
     RolesModule,
     AuditModule,
     RotationsModule,
+    ApprovalsModule,
+    OnboardingModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

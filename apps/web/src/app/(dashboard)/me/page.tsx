@@ -33,6 +33,13 @@ interface Payslip {
 }
 interface CustodyItem { id: string; itemName: string; assignedDate: string; returnedDate: string | null; status: string }
 interface UniformReq { id: string; uniformType: string; size: string | null; quantity: number; status: string; createdAt: string }
+interface QueueItem {
+  caseId: string; requestType: 'LEAVE' | 'UNIFORM' | 'ONBOARDING'; requestId: string
+  stepLabel: string; stepOrder: number; totalSteps: number
+  employee: { id: string; fullName: string; employeeCode: string }
+  title: string; detail: string; createdAt: string
+}
+interface OnboardingReq { id: string; type: 'NEW_HIRE' | 'RETURN_FROM_LEAVE'; scheduledDate: string; notes: string | null; status: string; createdAt: string }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
@@ -72,7 +79,7 @@ export default function MyPage() {
   const [today, setToday]     = useState<AttLog | null>(null)
   const [busy, setBusy]       = useState(false)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab]         = useState<'overview' | 'attendance' | 'schedule' | 'salary' | 'leaves' | 'custody'>('overview')
+  const [tab, setTab]         = useState<'overview' | 'queue' | 'attendance' | 'schedule' | 'salary' | 'leaves' | 'custody' | 'onboarding'>('overview')
 
   const userId = typeof window !== 'undefined' ? decodeToken()?.sub : null
   const loadToday = () => api.get('/attendance/me/today').then(r => setToday(r.data)).catch(() => {})
@@ -97,11 +104,13 @@ export default function MyPage() {
 
   const tabs = [
     { id: 'overview',   label: '👤 نظرة عامة' },
+    { id: 'queue',      label: '✅ موافقاتي' },
     { id: 'attendance', label: '🕐 حضوري' },
     { id: 'schedule',   label: '📅 جدولي' },
     { id: 'salary',     label: '💰 راتبي' },
     { id: 'leaves',     label: '🌴 إجازاتي' },
     { id: 'custody',    label: '📦 عهدتي وبدلتي' },
+    { id: 'onboarding', label: '🚪 مباشرتي' },
   ]
 
   return (
@@ -170,11 +179,13 @@ export default function MyPage() {
       </div>
 
       {tab === 'overview'   && <OverviewTab userId={userId!} />}
+      {tab === 'queue'      && <QueueTab />}
       {tab === 'attendance' && <AttendanceTab />}
       {tab === 'schedule'   && <ScheduleTab />}
       {tab === 'salary'     && <SalaryTab />}
       {tab === 'leaves'     && <LeavesTab userId={userId!} />}
       {tab === 'custody'    && <CustodyTab />}
+      {tab === 'onboarding' && <OnboardingTab />}
     </div>
   )
 }
@@ -537,6 +548,165 @@ function CustodyTab() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ══════════ موافقاتي — طلبات بانتظار قراري (رئيس قسم/مدير فرع/شؤون موظفين) ══════════ */
+const REQ_TYPE_LABEL: Record<string, string> = { LEAVE: 'إجازة', UNIFORM: 'بدلة عمل', ONBOARDING: 'مباشرة' }
+const REQ_TYPE_ICON: Record<string, string> = { LEAVE: '🌴', UNIFORM: '👔', ONBOARDING: '🚪' }
+
+function QueueTab() {
+  const [items, setItems] = useState<QueueItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [notesOpen, setNotesOpen] = useState<string | null>(null)
+  const [notes, setNotes] = useState('')
+
+  const load = () => { setLoading(true); api.get('/approvals/my-queue').then(r => setItems(r.data)).catch(() => {}).finally(() => setLoading(false)) }
+  useEffect(() => { load() }, [])
+
+  const endpointFor = (item: QueueItem) => {
+    if (item.requestType === 'LEAVE') return `/leaves/requests/${item.requestId}/approve`
+    if (item.requestType === 'UNIFORM') return `/uniforms/${item.requestId}/status`
+    return `/onboarding/${item.requestId}/decide`
+  }
+  const bodyKeyFor = (item: QueueItem) => item.requestType === 'ONBOARDING' ? 'decision' : 'status'
+
+  const decide = async (item: QueueItem, decision: 'APPROVED' | 'REJECTED') => {
+    setBusyId(item.caseId)
+    try {
+      const key = bodyKeyFor(item)
+      await api.put(endpointFor(item), { [key]: decision, notes: notes || undefined })
+      setNotesOpen(null); setNotes('')
+      load()
+    } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
+    finally { setBusyId(null) }
+  }
+
+  if (loading) return <div className="text-center py-16" style={{ color: 'var(--ink-3)' }}>جارٍ التحميل...</div>
+
+  return (
+    <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--line)', boxShadow: 'var(--shadow)' }}>
+      <h2 className="font-bold text-sm" style={{ color: 'var(--ink)' }}>طلبات بانتظار قراري</h2>
+      <p className="text-xs mt-0.5 mb-4" style={{ color: 'var(--ink-3)' }}>تظهر هنا الطلبات التي وصلت دورك فيها ضمن مسار الاعتماد</p>
+      {items.length === 0 ? (
+        <div className="text-center py-10" style={{ color: 'var(--ink-3)' }}>
+          <p className="text-3xl mb-2">✅</p>
+          <p className="text-sm">لا توجد طلبات بانتظار قرارك حالياً</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map(item => (
+            <div key={item.caseId} className="rounded-xl p-4" style={{ border: '1px solid var(--line)' }}>
+              <div className="flex items-start gap-3">
+                <span className="text-xl flex-shrink-0">{REQ_TYPE_ICON[item.requestType]}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                    {item.employee.fullName} <span className="font-normal" style={{ color: 'var(--ink-3)' }}>· {REQ_TYPE_LABEL[item.requestType]} · {item.title}</span>
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--ink-3)' }}>{item.detail}</p>
+                </div>
+                <span className="text-xs rounded-full px-2.5 py-1 flex-shrink-0 tabular-nums"
+                  style={{ background: 'var(--surface-2)', color: 'var(--ink-3)' }}>
+                  خطوتك <b style={{ color: 'var(--accent)' }}>{item.stepOrder}</b>‏/‏<b style={{ color: 'var(--accent)' }}>{item.totalSteps}</b> — {item.stepLabel}
+                </span>
+              </div>
+
+              {notesOpen === item.caseId && (
+                <input value={notes} onChange={e => setNotes(e.target.value)}
+                  placeholder="ملاحظة (اختياري)..." autoFocus
+                  className="w-full rounded-lg px-3 py-1.5 text-sm mt-3 outline-none"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)' }} />
+              )}
+
+              <div className="flex items-center gap-2 mt-3">
+                <button onClick={() => decide(item, 'APPROVED')} disabled={busyId === item.caseId}
+                  className="w-8 h-8 rounded-lg text-sm disabled:opacity-50" style={{ background: 'var(--good-soft)', color: 'var(--good)' }}
+                  aria-label="اعتماد" title="اعتماد">
+                  {busyId === item.caseId ? '···' : '✓'}
+                </button>
+                <button onClick={() => decide(item, 'REJECTED')} disabled={busyId === item.caseId}
+                  className="w-8 h-8 rounded-lg text-sm disabled:opacity-50" style={{ background: 'var(--crit-soft)', color: 'var(--crit)' }}
+                  aria-label="رفض" title="رفض">
+                  ✕
+                </button>
+                <button onClick={() => setNotesOpen(o => o === item.caseId ? null : item.caseId)}
+                  className="text-xs px-2 py-1.5 rounded-lg" style={{ color: 'var(--ink-3)' }}>
+                  {notesOpen === item.caseId ? 'إخفاء الملاحظة' : '+ إضافة ملاحظة'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ══════════ مباشرتي — تعيين / عودة من إجازة ══════════ */
+const ONBOARDING_LABEL: Record<string, string> = { NEW_HIRE: 'مباشرة تعيين', RETURN_FROM_LEAVE: 'مباشرة عودة من إجازة' }
+
+function OnboardingTab() {
+  const [items, setItems] = useState<OnboardingReq[]>([])
+  const [form, setForm] = useState({ type: 'RETURN_FROM_LEAVE' as 'RETURN_FROM_LEAVE' | 'NEW_HIRE', scheduledDate: localToday(), notes: '' })
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const load = () => api.get('/onboarding/my').then(r => setItems(r.data)).catch(() => {})
+  useEffect(() => { load() }, [])
+
+  const submit = async () => {
+    setBusy(true)
+    try {
+      await api.post('/onboarding', form)
+      setForm({ type: 'RETURN_FROM_LEAVE', scheduledDate: localToday(), notes: '' })
+      setOpen(false); load()
+    } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="font-semibold text-gray-700">مباشرتي</h2>
+          <p className="text-xs text-gray-400 mt-0.5">أرسل طلب مباشرة عودة من إجازة ليعتمده مسار الشركة</p>
+        </div>
+        <button onClick={() => setOpen(v => !v)} className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition">
+          {open ? '✕ إلغاء' : '+ طلب مباشرة'}
+        </button>
+      </div>
+
+      {open && (
+        <div className="border border-blue-100 rounded-xl p-4 mb-4 bg-blue-50/40">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as any }))} className="border rounded-lg px-3 py-2 text-sm bg-white">
+              <option value="RETURN_FROM_LEAVE">عودة من إجازة</option>
+              <option value="NEW_HIRE">مباشرة تعيين</option>
+            </select>
+            <input type="date" value={form.scheduledDate} onChange={e => setForm(f => ({ ...f, scheduledDate: e.target.value }))} className="border rounded-lg px-3 py-2 text-sm bg-white" />
+          </div>
+          <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات (اختياري)..." className="border rounded-lg px-3 py-2 text-sm bg-white w-full mb-3" />
+          <button onClick={submit} disabled={busy} className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            {busy ? '...' : 'إرسال الطلب'}
+          </button>
+        </div>
+      )}
+
+      {items.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">لا توجد طلبات مباشرة</p> : (
+        <div className="divide-y">
+          {items.map(r => (
+            <div key={r.id} className="flex items-center justify-between py-3">
+              <div>
+                <p className="text-sm font-medium text-gray-700">{ONBOARDING_LABEL[r.type]}</p>
+                <p className="text-xs text-gray-400">{fmtDate(r.scheduledDate)}</p>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_REQ[r.status]?.color ?? 'bg-gray-100 text-gray-600'}`}>{STATUS_REQ[r.status]?.label ?? r.status}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

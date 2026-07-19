@@ -3,7 +3,7 @@ import { Fragment, useState, useEffect, useMemo } from 'react'
 import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
 
-interface Shift { id: string; name: string; startTime: string; endTime: string; breakMinutes: number; isNightShift: boolean; workingDays: number[]; branch?: { id: string; name: string } | null }
+interface Shift { id: string; name: string; startTime: string; endTime: string; breakMinutes: number; minStaffing: number | null; isNightShift: boolean; workingDays: number[]; branch?: { id: string; name: string } | null }
 interface Employee { id: string; fullName: string; employeeCode: string }
 interface BranchOpt { id: string; name: string }
 interface ScheduleEntry { employeeId: string; employeeName: string; shiftName: string; date: string; startTime: string; endTime: string }
@@ -17,7 +17,7 @@ export default function ShiftsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [branches, setBranches] = useState<BranchOpt[]>([])
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([])
-  const [form, setForm] = useState({ name: '', branchId: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', isNightShift: false, workingDays: [0, 1, 2, 3, 4] })
+  const [form, setForm] = useState({ name: '', branchId: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', minStaffing: '', isNightShift: false, workingDays: [0, 1, 2, 3, 4] })
   const [assign, setAssign] = useState({ employeeId: '', shiftId: '', effectiveFrom: new Date().toISOString().split('T')[0] })
   const [schedDates, setSchedDates] = useState({ start: new Date().toISOString().split('T')[0], end: new Date(Date.now() + 6 * 86400000).toISOString().split('T')[0] })
   const [loading, setLoading] = useState(false)
@@ -42,8 +42,13 @@ export default function ShiftsPage() {
     if (!form.name.trim()) return
     setLoading(true)
     try {
-      await api.post('/shifts', { ...form, branchId: form.branchId || undefined, breakMinutes: Number(form.breakMinutes) })
-      setForm({ ...form, name: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', isNightShift: false, workingDays: [0, 1, 2, 3, 4] })
+      await api.post('/shifts', {
+        ...form,
+        branchId: form.branchId || undefined,
+        breakMinutes: Number(form.breakMinutes),
+        minStaffing: form.minStaffing ? Number(form.minStaffing) : undefined,
+      })
+      setForm({ ...form, name: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', minStaffing: '', isNightShift: false, workingDays: [0, 1, 2, 3, 4] })
       loadShifts()
     } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
     setLoading(false)
@@ -115,6 +120,8 @@ export default function ShiftsPage() {
                 <input type="time" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })} className={inp} /></div>
               <div><label className="text-xs text-gray-500 mb-1 block">استراحة (دقيقة)</label>
                 <input type="number" value={form.breakMinutes} onChange={e => setForm({ ...form, breakMinutes: e.target.value })} className={inp} /></div>
+              <div><label className="text-xs text-gray-500 mb-1 block">الحد الأدنى للتغطية (عدد الموظفين)</label>
+                <input type="number" min="0" placeholder="اختياري — لعرضه في لوحة التحكم" value={form.minStaffing} onChange={e => setForm({ ...form, minStaffing: e.target.value })} className={inp} /></div>
             </div>
             <div className="mb-4">
               <label className="text-xs text-gray-500 mb-2 block">أيام العمل</label>
@@ -140,12 +147,12 @@ export default function ShiftsPage() {
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
-                <tr>{['الشفت', 'الفرع', 'البداية', 'النهاية', 'الاستراحة', 'أيام العمل', 'نوع'].map(h =>
+                <tr>{['الشفت', 'الفرع', 'البداية', 'النهاية', 'الاستراحة', 'الحد الأدنى', 'أيام العمل', 'نوع'].map(h =>
                   <th key={h} className="text-right px-4 py-3 font-medium text-gray-600">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y">
                 {shifts.length === 0
-                  ? <tr><td colSpan={7} className="text-center py-10 text-gray-400">لا توجد شفتات</td></tr>
+                  ? <tr><td colSpan={8} className="text-center py-10 text-gray-400">لا توجد شفتات</td></tr>
                   : shifts.map(s => (
                     <tr key={s.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium">{s.name}</td>
@@ -157,6 +164,7 @@ export default function ShiftsPage() {
                       <td className="px-4 py-3 font-mono">{s.startTime}</td>
                       <td className="px-4 py-3 font-mono">{s.endTime}</td>
                       <td className="px-4 py-3">{s.breakMinutes} د</td>
+                      <td className="px-4 py-3">{s.minStaffing ? <span className="text-gray-700">{s.minStaffing} موظف</span> : <span className="text-gray-300 text-xs">—</span>}</td>
                       <td className="px-4 py-3 text-xs">{s.workingDays.map(d => DAYS[d]).join('، ')}</td>
                       <td className="px-4 py-3">{s.isNightShift ? '🌙 ليلي' : '☀️ نهاري'}</td>
                     </tr>

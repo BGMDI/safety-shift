@@ -2,13 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════
+   نظام الألوان — تركوازي تشغيلي + لمسة ذهبية بشرية
+   يُستخدم عبر var(--token) في الصفحات المُعاد تصميمها
+══════════════════════════════════════════ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ground: #EFF3F2;
+  --surface: #FFFFFF;
+  --surface-2: #F5F8F7;
+  --ink: #13201D;
+  --ink-2: #4C5A56;
+  --ink-3: #879690;
+  --line: #E1E8E5;
+  --line-strong: #CBD6D2;
+  --brand: #0C6E63;
+  --brand-2: #0A544C;
+  --brand-soft: #E1EEEB;
+  --accent: #B67F1F;
+  --accent-soft: #F4E9D2;
+  --good: #2E9E6B;
+  --good-soft: #E1F1E9;
+  --warn: #C67E22;
+  --warn-soft: #F6EAD7;
+  --crit: #C13E51;
+  --crit-soft: #F6E1E4;
+  --shadow: 0 1px 2px rgba(19,32,29,.04), 0 6px 20px -8px rgba(19,32,29,.10);
+  --shadow-lift: 0 2px 4px rgba(19,32,29,.05), 0 14px 34px -12px rgba(19,32,29,.18);
+
+  --background: var(--ground);
+  --foreground: var(--ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0C1412; --surface: #141F1C; --surface-2: #1A2622;
+    --ink: #E7EEEB; --ink-2: #A0B0AB; --ink-3: #6B7C77;
+    --line: #253330; --line-strong: #34443F;
+    --brand: #45AC9D; --brand-2: #2F8E80; --brand-soft: #16302B;
+    --accent: #D6A64C; --accent-soft: #2C2716;
+    --good: #46B888; --good-soft: #163024;
+    --warn: #DBA150; --warn-soft: #2E2617;
+    --crit: #DE6577; --crit-soft: #331B20;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -10px rgba(0,0,0,.5);
+    --shadow-lift: 0 2px 6px rgba(0,0,0,.35), 0 18px 40px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="light"] {
+  --ground: #EFF3F2; --surface: #FFFFFF; --surface-2: #F5F8F7;
+  --ink: #13201D; --ink-2: #4C5A56; --ink-3: #879690;
+  --line: #E1E8E5; --line-strong: #CBD6D2;
+  --brand: #0C6E63; --brand-2: #0A544C; --brand-soft: #E1EEEB;
+  --accent: #B67F1F; --accent-soft: #F4E9D2;
+  --good: #2E9E6B; --good-soft: #E1F1E9; --warn: #C67E22; --warn-soft: #F6EAD7;
+  --crit: #C13E51; --crit-soft: #F6E1E4;
+  --shadow: 0 1px 2px rgba(19,32,29,.04), 0 6px 20px -8px rgba(19,32,29,.10);
+  --shadow-lift: 0 2px 4px rgba(19,32,29,.05), 0 14px 34px -12px rgba(19,32,29,.18);
+}
+:root[data-theme="dark"] {
+  --ground: #0C1412; --surface: #141F1C; --surface-2: #1A2622;
+  --ink: #E7EEEB; --ink-2: #A0B0AB; --ink-3: #6B7C77;
+  --line: #253330; --line-strong: #34443F;
+  --brand: #45AC9D; --brand-2: #2F8E80; --brand-soft: #16302B;
+  --accent: #D6A64C; --accent-soft: #2C2716;
+  --good: #46B888; --good-soft: #163024; --warn: #DBA150; --warn-soft: #2E2617;
+  --crit: #DE6577; --crit-soft: #331B20;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -10px rgba(0,0,0,.5);
+  --shadow-lift: 0 2px 6px rgba(0,0,0,.35), 0 18px 40px -14px rgba(0,0,0,.6);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Segoe UI", "Noto Sans Arabic", "Tajawal", Tahoma, system-ui, sans-serif;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal { opacity: 0; transform: translateY(8px); animation: reveal-rise .55s cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes reveal-rise { to { opacity: 1; transform: none; } }
 }

@@ -7,9 +7,10 @@ import { useAuth } from '../../../hooks/useAuth'
 /* ══════════════════════════════════════════
    أنواع البيانات
 ══════════════════════════════════════════ */
-interface Dept     { id: string; name: string; _count: { employees: number } }
-interface Branch   { id: string; name: string; location: string | null; _count: { employees: number }; departments: Dept[] }
-interface FreeDept { id: string; name: string; branch: { id: string; name: string } | null; _count: { employees: number; children: number } }
+interface EmpOption { id: string; fullName: string; employeeCode: string }
+interface Dept     { id: string; name: string; headEmployeeId?: string | null; head?: EmpOption | null; _count: { employees: number } }
+interface Branch   { id: string; name: string; location: string | null; managerEmployeeId?: string | null; manager?: EmpOption | null; _count: { employees: number }; departments: Dept[] }
+interface FreeDept { id: string; name: string; branch: { id: string; name: string } | null; headEmployeeId?: string | null; head?: EmpOption | null; _count: { employees: number; children: number } }
 interface JobTitle { id: string; name: string; grade: string | null; baseSalary: number; _count: { employees: number } }
 
 const inp = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full bg-white'
@@ -67,6 +68,7 @@ export default function OrgPage() {
 function OrgTab() {
   const [branches, setBranches]   = useState<Branch[]>([])
   const [freeDepts, setFreeDepts] = useState<FreeDept[]>([])
+  const [employees, setEmployees] = useState<EmpOption[]>([])
 
   const [showAddBranch, setShowAddBranch]   = useState(false)
   const [branchForm, setBranchForm]         = useState({ name: '', location: '' })
@@ -83,16 +85,29 @@ function OrgTab() {
   const [showAddFree, setShowAddFree] = useState(false)
   const [freeName, setFreeName]       = useState('')
   const [savingFree, setSavingFree]   = useState(false)
+  const [managerPickerOpen, setManagerPickerOpen] = useState<string | null>(null)
 
   const load = async () => {
-    const [brRes, deptRes] = await Promise.all([
+    const [brRes, deptRes, empRes] = await Promise.all([
       api.get('/branches').catch(() => ({ data: [] })),
       api.get('/departments').catch(() => ({ data: [] })),
+      api.get('/employees?limit=500').catch(() => ({ data: [] })),
     ])
     setBranches(brRes.data)
     setFreeDepts((deptRes.data as FreeDept[]).filter(d => !d.branch))
+    setEmployees(empRes.data.data ?? empRes.data)
   }
   useEffect(() => { load() }, [])
+
+  /* ── تعيين رئيس القسم / مدير الفرع — يُستخدمان في مسار اعتماد الطلبات ── */
+  const setDeptHead = async (deptId: string, headEmployeeId: string) => {
+    await api.put(`/departments/${deptId}`, { headEmployeeId: headEmployeeId || null }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
+    load()
+  }
+  const setBranchManager = async (branchId: string, managerEmployeeId: string) => {
+    await api.put(`/branches/${branchId}`, { managerEmployeeId: managerEmployeeId || null }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
+    load()
+  }
 
   /* ── فروع ── */
   const createBranch = async () => {
@@ -138,6 +153,8 @@ function OrgTab() {
   }
 
   /* ── مكوّن قسم ── */
+  const [headPickerOpen, setHeadPickerOpen] = useState<string | null>(null)
+
   const DeptChip = ({ d }: { d: Dept | FreeDept }) => {
     const empCount = d._count.employees
     if (editDeptId === d.id) return (
@@ -150,15 +167,35 @@ function OrgTab() {
       </div>
     )
     return (
-      <div className="group flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 hover:border-blue-200 hover:shadow-sm transition-all">
-        <span className="text-gray-400 text-sm">📂</span>
-        <span className="text-sm text-gray-700 font-medium flex-1">{d.name}</span>
-        <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{empCount} موظف</span>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => { setEditDeptId(d.id); setEditDeptName(d.name) }}
-            className="text-blue-400 hover:text-blue-600 text-xs px-1.5 py-0.5 rounded hover:bg-blue-50">✎</button>
-          <button onClick={() => deleteDept(d.id, d.name, empCount)}
-            className="text-red-300 hover:text-red-500 text-xs px-1.5 py-0.5 rounded hover:bg-red-50">✕</button>
+      <div className="border border-gray-200 rounded-lg px-3 py-2 hover:border-blue-200 hover:shadow-sm transition-all">
+        <div className="group flex items-center gap-2">
+          <span className="text-gray-400 text-sm">📂</span>
+          <span className="text-sm text-gray-700 font-medium flex-1">{d.name}</span>
+          <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{empCount} موظف</span>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => { setEditDeptId(d.id); setEditDeptName(d.name) }}
+              className="text-blue-400 hover:text-blue-600 text-xs px-1.5 py-0.5 rounded hover:bg-blue-50">✎</button>
+            <button onClick={() => deleteDept(d.id, d.name, empCount)}
+              className="text-red-300 hover:text-red-500 text-xs px-1.5 py-0.5 rounded hover:bg-red-50">✕</button>
+          </div>
+        </div>
+        {/* رئيس القسم — يُستخدم كخطوة اعتماد الطلبات */}
+        <div className="mt-1.5 pt-1.5 border-t border-gray-50 flex items-center gap-1.5">
+          <span className="text-xs text-gray-400">👤 رئيس القسم:</span>
+          {headPickerOpen === d.id ? (
+            <select autoFocus defaultValue={d.headEmployeeId ?? ''}
+              onChange={e => { setDeptHead(d.id, e.target.value); setHeadPickerOpen(null) }}
+              onBlur={() => setHeadPickerOpen(null)}
+              className="text-xs border rounded px-1.5 py-0.5 bg-white flex-1">
+              <option value="">— بلا رئيس —</option>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+            </select>
+          ) : (
+            <button onClick={() => setHeadPickerOpen(d.id)}
+              className="text-xs text-blue-600 hover:underline">
+              {d.head?.fullName ?? 'تعيين رئيس'}
+            </button>
+          )}
         </div>
       </div>
     )
@@ -244,6 +281,23 @@ function OrgTab() {
                     {b.departments.length} قسم
                     {b._count.employees > 0 ? ` · ${b._count.employees} موظف` : ''}
                   </p>
+                  {/* مدير الفرع — يُستخدم كخطوة اعتماد الطلبات */}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-xs text-gray-400">🧑‍💼 مدير الفرع:</span>
+                    {managerPickerOpen === b.id ? (
+                      <select autoFocus defaultValue={b.managerEmployeeId ?? ''}
+                        onChange={e => { setBranchManager(b.id, e.target.value); setManagerPickerOpen(null) }}
+                        onBlur={() => setManagerPickerOpen(null)}
+                        className="text-xs border rounded px-1.5 py-0.5 bg-white">
+                        <option value="">— بلا مدير —</option>
+                        {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+                      </select>
+                    ) : (
+                      <button onClick={() => setManagerPickerOpen(b.id)} className="text-xs text-blue-600 hover:underline">
+                        {b.manager?.fullName ?? 'تعيين مدير'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-lg font-medium">👥 {b._count.employees}</span>

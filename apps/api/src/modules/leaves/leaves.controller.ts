@@ -81,8 +81,10 @@ export class LeavesController {
     return this.svc.submitRequest(u.tenantId, u.sub, dto)
   }
 
-  @Put('requests/:id/approve') @Roles('super_admin', 'hr_manager', 'supervisor')
+  /* الأهلية محسوبة ديناميكياً داخل الخدمة: إمّا موافق مؤهّل ضمن مسار الاعتماد المُهيّأ،
+     أو أحد أدوار الإدارة عند عدم وجود مسار مُهيّأ للشركة (سلوك احتياطي متوافق مع الإصدارات السابقة) */
+  @Put('requests/:id/approve')
   approveRequest(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ApproveLeaveDto) {
-    return this.svc.approveRequest(u.tenantId, id, u.sub, dto)
+    return this.svc.approveRequest(u.tenantId, id, u, dto)
   }
 }

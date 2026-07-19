@@ -29,9 +29,9 @@ export class UniformsController {
     return this.svc.create(u.tenantId, { ...body, employeeId })
   }
 
-  /* اعتماد/رفض الطلب — الإدارة فقط */
-  @Put(':id/status') @Roles('super_admin', 'hr_manager', 'supervisor')
-  updateStatus(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() body: { status: string }) {
-    return this.svc.updateStatus(u.tenantId, id, body.status, u.sub)
+  /* اعتماد/رفض الطلب — الأهلية محسوبة ديناميكياً (مسار اعتماد مُهيّأ) أو أدوار الإدارة عند عدم وجود مسار */
+  @Put(':id/status')
+  decide(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() body: { status: 'APPROVED' | 'REJECTED'; notes?: string }) {
+    return this.svc.decide(u.tenantId, id, u, body.status, body.notes)
   }
 }

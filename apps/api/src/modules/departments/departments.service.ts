@@ -10,6 +10,7 @@ export class DepartmentsService {
       include: {
         parent: { select: { id: true, name: true } },
         branch: { select: { id: true, name: true } },
+        head: { select: { id: true, fullName: true, employeeCode: true } },
         _count: { select: { employees: true, children: true } },
       },
       orderBy: { name: 'asc' },
@@ -31,16 +32,17 @@ export class DepartmentsService {
 
   async create(tenantId: string, dto: CreateDepartmentDto) {
     return prisma.department.create({
-      data: { tenantId, name: dto.name, parentId: dto.parentId, branchId: dto.branchId },
+      data: { tenantId, name: dto.name, parentId: dto.parentId, branchId: dto.branchId, headEmployeeId: dto.headEmployeeId },
     })
   }
 
   async update(tenantId: string, id: string, dto: UpdateDepartmentDto) {
     await this.findOne(tenantId, id)
     const data: any = {}
-    if (dto.name      !== undefined) data.name      = dto.name
-    if (dto.parentId  !== undefined) data.parentId  = dto.parentId  || null
-    if (dto.branchId  !== undefined) data.branchId  = dto.branchId  || null
+    if (dto.name           !== undefined) data.name           = dto.name
+    if (dto.parentId       !== undefined) data.parentId       = dto.parentId       || null
+    if (dto.branchId       !== undefined) data.branchId       = dto.branchId       || null
+    if (dto.headEmployeeId !== undefined) data.headEmployeeId = dto.headEmployeeId || null
     return prisma.department.update({ where: { id }, data })
   }
 

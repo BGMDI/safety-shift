@@ -33,6 +33,9 @@ model Tenant {
   roles             Role[]
   subscriptions     Subscription[]
   rotationPlans     RotationPlan[]
+  onboardingRequests OnboardingRequest[]
+  approvalWorkflows ApprovalWorkflow[]
+  approvalCases     ApprovalCase[]
 
   @@map("tenants")
 }
@@ -77,14 +80,16 @@ model Subscription {
 // =============================
 
 model Branch {
-  id        String   @id @default(uuid())
-  tenantId  String
-  name      String
-  location  String?
-  timezone  String   @default("Asia/Riyadh")
-  createdAt DateTime @default(now())
+  id                String   @id @default(uuid())
+  tenantId          String
+  name              String
+  location          String?
+  timezone          String   @default("Asia/Riyadh")
+  managerEmployeeId String?  // مدير الفرع — يُستخدم في مسار اعتماد الطلبات
+  createdAt         DateTime @default(now())
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  manager     Employee?    @relation("BranchManager", fields: [managerEmployeeId], references: [id])
   employees   Employee[]
   shifts      Shift[]
   departments Department[]
@@ -97,16 +102,18 @@ model Branch {
 // =============================
 
 model Department {
-  id        String  @id @default(uuid())
-  tenantId  String
-  branchId  String?        // الفرع المرتبط (اختياري)
-  name      String
-  parentId  String?
+  id              String  @id @default(uuid())
+  tenantId        String
+  branchId        String?        // الفرع المرتبط (اختياري)
+  name            String
+  parentId        String?
+  headEmployeeId  String?        // رئيس القسم / المشرف — يُستخدم في مسار اعتماد الطلبات
 
   tenant    Tenant       @relation(fields: [tenantId], references: [id])
   branch    Branch?      @relation(fields: [branchId], references: [id])
   parent    Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
   children  Department[] @relation("DeptHierarchy")
+  head      Employee?    @relation("DeptHead", fields: [headEmployeeId], references: [id])
   employees Employee[]
 
   @@map("departments")
@@ -172,6 +179,11 @@ model Employee {
   permissionLogs  PermissionLog[]
   uniformRequests UniformRequest[]
   rotationMemberships RotationGroupMember[]
+  headedDepartments Department[]    @relation("DeptHead")
+  managedBranches   Branch[]        @relation("BranchManager")
+  onboardingRequests OnboardingRequest[]
+  approvalCases     ApprovalCase[]
+  approvalActions   ApprovalAction[]
 
   @@unique([tenantId, employeeCode])
   @@map("employees")
@@ -291,6 +303,7 @@ model Shift {
   breakMinutes Int      @default(0)
   isNightShift Boolean  @default(false)
   workingDays  Int[]
+  minStaffing  Int?     // الحد الأدنى المطلوب من الموظفين لهذه الوردية — لحساب فجوة التغطية
 
   tenant          Tenant          @relation(fields: [tenantId], references: [id])
   branch          Branch          @relation(fields: [branchId], references: [id])
@@ -507,6 +520,7 @@ model Role {
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   permissions   Permission[]
   employeeRoles EmployeeRole[]
+  approvalSteps ApprovalStep[]
 
   @@map("roles")
 }
@@ -572,4 +586,133 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@map("audit_logs")
+}
+
+// =============================
+// المباشرات (تعيين / عودة من إجازة)
+// =============================
+
+enum OnboardingType {
+  NEW_HIRE           // مباشرة تعيين جديد
+  RETURN_FROM_LEAVE  // مباشرة عودة من إجازة
+}
+
+model OnboardingRequest {
+  id           String         @id @default(uuid())
+  tenantId     String
+  employeeId   String
+  type         OnboardingType
+  scheduledDate DateTime      @db.Date
+  notes        String?
+  status       RequestStatus  @default(PENDING)
+  approvedBy   String?
+  createdAt    DateTime       @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("onboarding_requests")
+}
+
+// =============================
+// مسارات اعتماد الطلبات (قابلة للتهيئة لكل شركة)
+// =============================
+
+enum ApprovalRequestType {
+  LEAVE       // الإجازات
+  UNIFORM     // بدلة العمل
+  ONBOARDING  // المباشرات
+}
+
+// كيف يُحدَّد الموافق على خطوة معيّنة
+enum ApproverKind {
+  ROLE            // أي موظف يحمل دوراً معيّناً (roleId)
+  DEPT_HEAD       // رئيس قسم مقدّم الطلب (Department.headEmployeeId)
+  BRANCH_MANAGER  // مدير فرع مقدّم الطلب (Branch.managerEmployeeId)
+}
+
+enum ApprovalCaseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalActionStatus {
+  PENDING   // لم يصلها الدور بعد / بانتظار البتّ
+  SKIPPED   // تخطّاها النظام (لا يوجد موافق مؤهّل لهذه الخطوة)
+  APPROVED
+  REJECTED
+}
+
+/// مسار الاعتماد المُهيّأ لكل نوع طلب — تحدّده كل شركة عند الاشتراك أو من الإعدادات
+model ApprovalWorkflow {
+  id       String              @id @default(uuid())
+  tenantId String
+  type     ApprovalRequestType
+  isActive Boolean             @default(true)
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id])
+  steps  ApprovalStep[]
+  cases  ApprovalCase[]
+
+  @@unique([tenantId, type])
+  @@map("approval_workflows")
+}
+
+/// خطوة واحدة ضمن مسار الاعتماد، بترتيب محدّد
+model ApprovalStep {
+  id           String       @id @default(uuid())
+  workflowId   String
+  order        Int          // ترتيب الخطوة ضمن المسار (1، 2، 3...)
+  label        String       // اسم الخطوة المعروض ("مشرف القسم"، "مدير الفرع"، "شؤون الموظفين")
+  approverKind ApproverKind
+  roleId       String?      // مطلوب فقط عندما approverKind = ROLE
+
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  role     Role?            @relation(fields: [roleId], references: [id])
+  actions  ApprovalAction[]
+
+  @@unique([workflowId, order])
+  @@map("approval_steps")
+}
+
+/// حالة اعتماد طلب واحد (إجازة / بدلة / مباشرة) عبر مساره المُهيّأ
+model ApprovalCase {
+  id           String              @id @default(uuid())
+  tenantId     String
+  workflowId   String
+  requestType  ApprovalRequestType
+  requestId    String              // معرّف الطلب الأصلي (LeaveRequest / UniformRequest / OnboardingRequest)
+  employeeId   String              // مقدّم الطلب
+  status       ApprovalCaseStatus  @default(PENDING)
+  currentOrder Int                 @default(1)
+  createdAt    DateTime            @default(now())
+  decidedAt    DateTime?
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id])
+  employee Employee         @relation(fields: [employeeId], references: [id])
+  actions  ApprovalAction[]
+
+  @@unique([requestType, requestId])
+  @@map("approval_cases")
+}
+
+/// أثر كل خطوة على حالة الطلب — من بتّ فيها ومتى
+model ApprovalAction {
+  id        String                @id @default(uuid())
+  caseId    String
+  stepId    String
+  order     Int
+  status    ApprovalActionStatus  @default(PENDING)
+  decidedBy String?
+  decidedAt DateTime?
+  notes     String?
+
+  case    ApprovalCase  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  step    ApprovalStep  @relation(fields: [stepId], references: [id])
+  decider Employee?     @relation(fields: [decidedBy], references: [id])
+
+  @@unique([caseId, order])
+  @@map("approval_actions")
 }

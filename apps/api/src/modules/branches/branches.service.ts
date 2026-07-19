@@ -8,6 +8,7 @@ export class BranchesService {
       where: { tenantId },
       include: {
         _count: { select: { employees: true } },
+        manager: { select: { id: true, fullName: true, employeeCode: true } },
         departments: {
           select: { id: true, name: true, _count: { select: { employees: true } } },
           orderBy: { name: 'asc' },
@@ -17,14 +18,14 @@ export class BranchesService {
     })
   }
 
-  async create(tenantId: string, data: { name: string; location?: string }) {
-    return prisma.branch.create({ data: { tenantId, name: data.name, location: data.location } })
+  async create(tenantId: string, data: { name: string; location?: string; managerEmployeeId?: string }) {
+    return prisma.branch.create({ data: { tenantId, name: data.name, location: data.location, managerEmployeeId: data.managerEmployeeId } })
   }
 
-  async update(tenantId: string, id: string, data: { name?: string; location?: string }) {
+  async update(tenantId: string, id: string, data: { name?: string; location?: string; managerEmployeeId?: string | null }) {
     const branch = await prisma.branch.findFirst({ where: { tenantId, id } })
     if (!branch) throw new NotFoundException('الفرع غير موجود')
-    return prisma.branch.update({ where: { id }, data })
+    return prisma.branch.update({ where: { id }, data: { ...data, managerEmployeeId: data.managerEmployeeId || null } })
   }
 
   async remove(tenantId: string, id: string) {

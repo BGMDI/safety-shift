@@ -20,6 +20,7 @@ export class ShiftsService {
     breakMinutes?: number
     isNightShift?: boolean
     workingDays: number[]
+    minStaffing?: number
   }) {
     // تحقق أن الفرع تابع للشركة — وإلا استخدم أول فرع
     let branchId = data.branchId
