@@ -2,7 +2,9 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nest
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
+import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { isManager } from '../../common/auth.util'
 import { OnboardingService } from './onboarding.service'
@@ -11,7 +13,8 @@ import { JwtPayload } from '@shift-saas/types'
 
 @ApiTags('Onboarding')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@RequiresModule('ONBOARDING')
 @Controller('onboarding')
 export class OnboardingController {
   constructor(private svc: OnboardingService) {}

@@ -2,7 +2,9 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nest
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
+import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { isManager } from '../../common/auth.util'
 import { UniformsService } from './uniforms.service'
@@ -10,7 +12,8 @@ import { JwtPayload } from '@shift-saas/types'
 
 @ApiTags('Uniforms')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@RequiresModule('UNIFORMS')
 @Controller('uniforms')
 export class UniformsController {
   constructor(private svc: UniformsService) {}

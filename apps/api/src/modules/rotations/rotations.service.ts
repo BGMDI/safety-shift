@@ -4,22 +4,23 @@ import { prisma } from '@shift-saas/database'
 const DAY_MS = 86400000
 const GROUP_NAMES = ['المجموعة أ', 'المجموعة ب', 'المجموعة ج', 'المجموعة د', 'المجموعة هـ', 'المجموعة و', 'المجموعة ز', 'المجموعة ح']
 
-/* كتلة في دورة التدوير: شفت لعدة أيام، أو راحة (shiftId = null) */
+/* كتلة في دورة التدوير: شفت لعدة أيام (عدده الخاص)، أو راحة (shiftId = null) */
 interface Slot { shiftId: string | null; start: number; len: number }
+interface StepInput { shiftId: string; days: number }
 
 const dateOnly = (d: Date) => d.toISOString().slice(0, 10)
 
 @Injectable()
 export class RotationsService {
 
-  /* ── بناء دورة التدوير: كتلة لكل شفت بالترتيب + كتلة راحة عند القلبة ── */
-  private buildSlots(plan: { shiftIds: string[]; rotateEveryDays: number; restMode: string; restDays: number }) {
-    const R = Math.max(1, plan.rotateEveryDays)
+  /* ── بناء دورة التدوير: كتلة لكل خطوة بعدد أيامها الخاص + كتلة راحة عند القلبة ── */
+  private buildSlots(plan: { steps: StepInput[]; restMode: string; restDays: number }) {
     const slots: Slot[] = []
     let acc = 0
-    for (const sid of plan.shiftIds) {
-      slots.push({ shiftId: sid, start: acc, len: R })
-      acc += R
+    for (const step of plan.steps) {
+      const len = Math.max(1, step.days)
+      slots.push({ shiftId: step.shiftId, start: acc, len })
+      acc += len
     }
     if (plan.restMode === 'AT_ROTATION' && plan.restDays > 0) {
       slots.push({ shiftId: null, start: acc, len: plan.restDays })
@@ -39,7 +40,7 @@ export class RotationsService {
 
   /* ── مصفوفة الجدول: يوم × مجموعة → شفت أو راحة ── */
   private buildMatrix(
-    plan: { shiftIds: string[]; rotateEveryDays: number; restMode: string; restDays: number; weeklyRestDays: number[]; startDate: Date },
+    plan: { steps: StepInput[]; restMode: string; restDays: number; weeklyRestDays: number[]; startDate: Date },
     groupCount: number,
     windowStart: Date,
     days: number,
@@ -55,7 +56,7 @@ export class RotationsService {
       const cells: (string | null)[] = []
       for (let gi = 0; gi < groupCount; gi++) {
         if (dayIndex < 0) { cells.push(null); continue } // قبل بداية الخطة
-        let shiftId = this.slotFor(slots, cycle, gi, dayIndex)
+        let shiftId = cycle > 0 ? this.slotFor(slots, cycle, gi, dayIndex) : null
         if (plan.restMode === 'WEEKLY' && plan.weeklyRestDays.includes(weekday)) shiftId = null
         cells.push(shiftId)
       }
@@ -68,6 +69,7 @@ export class RotationsService {
     const plan = await prisma.rotationPlan.findFirst({
       where: { id, tenantId },
       include: {
+        steps: { orderBy: { order: 'asc' }, include: { shift: { select: { id: true, name: true, startTime: true, endTime: true } } } },
         groups: {
           orderBy: { order: 'asc' },
           include: {
@@ -88,6 +90,7 @@ export class RotationsService {
     return prisma.rotationPlan.findMany({
       where: { tenantId },
       include: {
+        steps: { orderBy: { order: 'asc' }, include: { shift: { select: { id: true, name: true, startTime: true, endTime: true } } } },
         groups: {
           orderBy: { order: 'asc' },
           include: {
@@ -103,8 +106,7 @@ export class RotationsService {
 
   async create(tenantId: string, dto: {
     name: string
-    shiftIds: string[]
-    rotateEveryDays: number
+    steps: StepInput[]          // كل خطوة: شفت + عدد أيامه الخاص (مثال: 3 صباحي، 2 مسائي، 1 ليلي)
     restMode: string
     restDays?: number
     weeklyRestDays?: number[]
@@ -112,24 +114,30 @@ export class RotationsService {
     groupCount?: number
   }) {
     if (!dto.name?.trim()) throw new BadRequestException('اسم الخطة مطلوب')
-    if (!dto.shiftIds?.length) throw new BadRequestException('اختر شفتاً واحداً على الأقل')
+    if (!dto.steps?.length) throw new BadRequestException('أضف شفتاً واحداً على الأقل')
+    for (const s of dto.steps) {
+      if (!s.shiftId) throw new BadRequestException('كل خطوة تحتاج شفتاً محدَّداً')
+      if (!s.days || s.days < 1) throw new BadRequestException('عدد أيام كل خطوة يجب أن يكون 1 على الأقل')
+    }
 
     // تحقق أن الشفتات تابعة لنفس الشركة
-    const shifts = await prisma.shift.findMany({ where: { tenantId, id: { in: dto.shiftIds } } })
-    if (shifts.length !== dto.shiftIds.length) throw new BadRequestException('شفت غير صالح')
+    const shiftIds = dto.steps.map(s => s.shiftId)
+    const shifts = await prisma.shift.findMany({ where: { tenantId, id: { in: shiftIds } } })
+    if (shifts.length !== new Set(shiftIds).size) throw new BadRequestException('شفت غير صالح')
 
-    const groupCount = Math.min(Math.max(dto.groupCount ?? dto.shiftIds.length + 1, 1), 8)
+    const groupCount = Math.min(Math.max(dto.groupCount ?? dto.steps.length + 1, 1), 8)
 
     return prisma.rotationPlan.create({
       data: {
         tenantId,
         name: dto.name.trim(),
-        shiftIds: dto.shiftIds,
-        rotateEveryDays: Math.max(1, dto.rotateEveryDays ?? 3),
         restMode: dto.restMode === 'WEEKLY' ? 'WEEKLY' : 'AT_ROTATION',
         restDays: Math.max(0, dto.restDays ?? 1),
         weeklyRestDays: dto.weeklyRestDays ?? [],
         startDate: new Date(dto.startDate),
+        steps: {
+          create: dto.steps.map((s, i) => ({ order: i + 1, shiftId: s.shiftId, days: Math.max(1, s.days) })),
+        },
         groups: {
           create: Array.from({ length: groupCount }, (_, i) => ({
             name: GROUP_NAMES[i] ?? `مجموعة ${i + 1}`,
@@ -137,13 +145,13 @@ export class RotationsService {
           })),
         },
       },
-      include: { groups: true },
+      include: { steps: true, groups: true },
     })
   }
 
   async remove(tenantId: string, id: string) {
     await this.getPlan(tenantId, id)
-    await prisma.rotationPlan.delete({ where: { id } }) // groups/members تُحذف تلقائياً (cascade)
+    await prisma.rotationPlan.delete({ where: { id } }) // steps/groups/members تُحذف تلقائياً (cascade)
     return { message: 'تم حذف الخطة' }
   }
 
@@ -227,7 +235,8 @@ export class RotationsService {
     const plan = await this.getPlan(tenantId, planId)
     const horizon = Math.min(Math.max(days, 1), 90)
     const windowStart = new Date(startDate ?? dateOnly(plan.startDate > new Date() ? plan.startDate : new Date()))
-    const matrix = this.buildMatrix(plan, plan.groups.length, windowStart, horizon)
+    const stepInputs = plan.steps.map(s => ({ shiftId: s.shiftId, days: s.days }))
+    const matrix = this.buildMatrix({ ...plan, steps: stepInputs }, plan.groups.length, windowStart, horizon)
     return {
       planId: plan.id,
       startDate: dateOnly(windowStart),
@@ -247,7 +256,8 @@ export class RotationsService {
     const allMembers = plan.groups.flatMap(g => g.members.map(m => m.employeeId))
     if (!allMembers.length) throw new BadRequestException('لا يوجد موظفون في مجموعات الخطة — أضفهم أولاً')
 
-    const matrix = this.buildMatrix(plan, plan.groups.length, windowStart, horizon)
+    const stepInputs = plan.steps.map(s => ({ shiftId: s.shiftId, days: s.days }))
+    const matrix = this.buildMatrix({ ...plan, steps: stepInputs }, plan.groups.length, windowStart, horizon)
 
     // نظّف التعيينات المتداخلة مع الفترة
     const dayBefore = new Date(windowStart.getTime() - DAY_MS)

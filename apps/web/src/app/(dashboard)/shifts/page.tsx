@@ -257,9 +257,10 @@ const inp = 'border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2
 ══════════════════════════════════════════ */
 interface RotMember { id: string; employee: { id: string; fullName: string; employeeCode: string } }
 interface RotGroup { id: string; name: string; order: number; members: RotMember[] }
+interface RotStep { id: string; order: number; days: number; shift: { id: string; name: string; startTime: string; endTime: string } }
 interface RotPlan {
   id: string; name: string
-  shiftIds: string[]; rotateEveryDays: number
+  steps: RotStep[]
   restMode: string; restDays: number; weeklyRestDays: number[]
   startDate: string
   groups: RotGroup[]
@@ -291,8 +292,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
   /* نموذج إنشاء خطة */
   const [form, setForm] = useState({
     name: '',
-    shiftIds: [] as string[],
-    rotateEveryDays: 3,
+    steps: [] as { shiftId: string; days: number }[],
     restMode: 'AT_ROTATION',
     restDays: 1,
     weeklyRestDays: [] as number[],
@@ -316,12 +316,19 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
   const load = () => api.get('/rotations').then(r => setPlans(r.data)).catch(() => {})
   useEffect(() => { load() }, [])
 
-  const suggestedGroups = form.shiftIds.length + (form.restMode === 'AT_ROTATION' && form.restDays > 0 ? 1 : 0)
+  const suggestedGroups = form.steps.length + (form.restMode === 'AT_ROTATION' && form.restDays > 0 ? 1 : 0)
 
   const toggleShift = (id: string) => {
     setForm(f => ({
       ...f,
-      shiftIds: f.shiftIds.includes(id) ? f.shiftIds.filter(x => x !== id) : [...f.shiftIds, id],
+      steps: f.steps.some(s => s.shiftId === id) ? f.steps.filter(s => s.shiftId !== id) : [...f.steps, { shiftId: id, days: 3 }],
+    }))
+  }
+
+  const setStepDays = (id: string, days: number) => {
+    setForm(f => ({
+      ...f,
+      steps: f.steps.map(s => s.shiftId === id ? { ...s, days: Math.max(1, days) } : s),
     }))
   }
 
@@ -333,14 +340,14 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
   }
 
   const createPlan = async () => {
-    if (!form.name.trim() || !form.shiftIds.length) return
+    if (!form.name.trim() || !form.steps.length) return
     setSaving(true)
     try {
       await api.post('/rotations', {
         ...form,
         groupCount: form.groupCount || suggestedGroups,
       })
-      setForm({ name: '', shiftIds: [], rotateEveryDays: 3, restMode: 'AT_ROTATION', restDays: 1, weeklyRestDays: [], startDate: localToday(), groupCount: 0 })
+      setForm({ name: '', steps: [], restMode: 'AT_ROTATION', restDays: 1, weeklyRestDays: [], startDate: localToday(), groupCount: 0 })
       setShowCreate(false)
       load()
     } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
@@ -441,7 +448,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
             ) : (
               <div className="flex flex-wrap gap-2">
                 {shifts.map(s => {
-                  const idx = form.shiftIds.indexOf(s.id)
+                  const idx = form.steps.findIndex(st => st.shiftId === s.id)
                   return (
                     <button key={s.id} onClick={() => toggleShift(s.id)}
                       className={`px-3 py-2 rounded-lg text-xs font-medium border transition ${
@@ -455,12 +462,29 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          {/* عدد أيام كل شفت في الدورة */}
+          {form.steps.length > 0 && (
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">قلب الشفت كل (أيام)</label>
-              <input type="number" min={1} max={30} value={form.rotateEveryDays}
-                onChange={e => setForm(f => ({ ...f, rotateEveryDays: Number(e.target.value) }))} className={inp} />
+              <label className="text-xs text-gray-500 mb-2 block">عدد أيام كل شفت في الدورة</label>
+              <div className="space-y-1.5">
+                {form.steps.map((st, i) => {
+                  const shift = shiftMap.get(st.shiftId)
+                  return (
+                    <div key={st.shiftId} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
+                      <span className="inline-block bg-blue-600 text-white rounded-full w-5 h-5 text-center leading-5 text-xs flex-shrink-0">{i + 1}</span>
+                      <span className="text-xs text-gray-700 flex-1">{shift?.name ?? '؟'} ({shift?.startTime}–{shift?.endTime})</span>
+                      <input type="number" min={1} max={30} value={st.days}
+                        onChange={e => setStepDays(st.shiftId, Number(e.target.value))}
+                        className="w-16 border rounded-lg px-2 py-1 text-xs text-center" />
+                      <span className="text-xs text-gray-400">يوم</span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">نظام الراحة</label>
               <select value={form.restMode} onChange={e => setForm(f => ({ ...f, restMode: e.target.value }))} className={inp}>
@@ -513,7 +537,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
             </div>
           )}
 
-          <button onClick={createPlan} disabled={saving || !form.name.trim() || !form.shiftIds.length}
+          <button onClick={createPlan} disabled={saving || !form.name.trim() || !form.steps.length}
             className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {saving ? '⏳ جارٍ الإنشاء...' : '✓ إنشاء الخطة'}
           </button>
@@ -540,8 +564,8 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-gray-800">{plan.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {plan.shiftIds.map(id => shiftMap.get(id)?.name ?? '؟').join(' ← ')}
-                  {' · '}قلب كل {plan.rotateEveryDays} أيام · {restLabel(plan)}
+                  {plan.steps.map(s => `${s.shift.name} (${s.days}ي)`).join(' ← ')}
+                  {' · '}{restLabel(plan)}
                 </p>
               </div>
               <span className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-medium flex-shrink-0">

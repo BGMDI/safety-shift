@@ -2,7 +2,9 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } fro
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
+import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { assertSelfOrManager, isManager } from '../../common/auth.util'
 import { LeavesService, CALC_LABELS } from './leaves.service'
@@ -15,7 +17,8 @@ import { JwtPayload } from '@shift-saas/types'
 
 @ApiTags('Leaves')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@RequiresModule('LEAVES')
 @Controller('leaves')
 export class LeavesController {
   constructor(private svc: LeavesService) {}

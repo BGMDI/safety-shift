@@ -7,6 +7,7 @@ export interface TokenPayload {
   tenantId: string
   email: string
   roles: string[]
+  modules?: string[]
   exp?: number
 }
 
@@ -44,4 +45,13 @@ export function isHR(): boolean {
 
 export function isSuperAdmin(): boolean {
   return getRoles().includes('super_admin')
+}
+
+/** الأقسام المفعّلة في باقة اشتراك الشركة — الموظفون والهيكل التنظيمي أساسيان دائماً ولا يحتاجان فحصاً */
+export function getModules(): string[] {
+  return decodeToken()?.modules ?? []
+}
+
+export function hasModule(module: string): boolean {
+  return getModules().includes(module)
 }

@@ -2,12 +2,12 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { getRoles } from '../../lib/auth'
+import { getRoles, getModules } from '../../lib/auth'
 import { ThemeToggle } from './theme-toggle'
 
 type Access = 'all' | 'mgmt' | 'hr' | 'super'
 
-interface NavItem { href: string; label: string; icon: string; access: Access }
+interface NavItem { href: string; label: string; icon: string; access: Access; module?: string }
 interface NavGroup { label: string; items: NavItem[] }
 
 const navGroups: NavGroup[] = [
@@ -23,31 +23,31 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/employees',   label: 'الموظفون',         icon: '👥', access: 'mgmt' },
       { href: '/departments', label: 'الهيكل التنظيمي', icon: '🏢', access: 'mgmt' },
-      { href: '/leaves',      label: 'الإجازات',          icon: '🌴', access: 'mgmt' },
-      { href: '/onboarding',  label: 'المباشرات',         icon: '🚪', access: 'mgmt' },
-      { href: '/custody',     label: 'العهد وإخلاء الطرف', icon: '📦', access: 'mgmt' },
-      { href: '/uniforms',    label: 'بدلة العمل',         icon: '👔', access: 'mgmt' },
+      { href: '/leaves',      label: 'الإجازات',          icon: '🌴', access: 'mgmt', module: 'LEAVES' },
+      { href: '/onboarding',  label: 'المباشرات',         icon: '🚪', access: 'mgmt', module: 'ONBOARDING' },
+      { href: '/custody',     label: 'العهد وإخلاء الطرف', icon: '📦', access: 'mgmt', module: 'CUSTODY' },
+      { href: '/uniforms',    label: 'بدلة العمل',         icon: '👔', access: 'mgmt', module: 'UNIFORMS' },
     ],
   },
   {
     label: 'الحضور والشفتات',
     items: [
-      { href: '/attendance', label: 'الحضور والانصراف', icon: '🕐', access: 'mgmt' },
-      { href: '/shifts',     label: 'جدولة الشفتات',    icon: '🔄', access: 'mgmt' },
+      { href: '/attendance', label: 'الحضور والانصراف', icon: '🕐', access: 'mgmt', module: 'ATTENDANCE' },
+      { href: '/shifts',     label: 'جدولة الشفتات',    icon: '🔄', access: 'mgmt', module: 'SHIFTS' },
     ],
   },
   {
     label: 'المالية',
     items: [
-      { href: '/payroll', label: 'مسير الرواتب', icon: '💰', access: 'hr' },
+      { href: '/payroll', label: 'مسير الرواتب', icon: '💰', access: 'hr', module: 'PAYROLL' },
     ],
   },
   {
     label: 'الإعدادات',
     items: [
-      { href: '/roles',     label: 'الصلاحيات',      icon: '🔑', access: 'super' },
-      { href: '/approvals', label: 'مسار الاعتماد', icon: '✅', access: 'hr' },
-      { href: '/audit',     label: 'سجل التدقيق',    icon: '📜', access: 'hr' },
+      { href: '/roles',     label: 'الصلاحيات',      icon: '🔑', access: 'super', module: 'ROLES' },
+      { href: '/approvals', label: 'مسار الاعتماد', icon: '✅', access: 'hr', module: 'APPROVALS' },
+      { href: '/audit',     label: 'سجل التدقيق',    icon: '📜', access: 'hr', module: 'AUDIT' },
       { href: '/settings',  label: 'الإعدادات',      icon: '⚙️', access: 'mgmt' },
     ],
   },
@@ -67,12 +67,16 @@ function canAccess(access: Access, roles: string[]): boolean {
 export function Sidebar() {
   const pathname = usePathname()
   const [roles, setRoles] = useState<string[]>([])
+  const [modules, setModules] = useState<string[]>([])
 
-  useEffect(() => { setRoles(getRoles()) }, [])
+  useEffect(() => { setRoles(getRoles()); setModules(getModules()) }, [])
 
-  // صفّي المجموعات والعناصر حسب دور المستخدم
+  // صفّي المجموعات والعناصر حسب دور المستخدم وحسب الأقسام المفعّلة في باقة الاشتراك
   const groups = navGroups
-    .map(g => ({ ...g, items: g.items.filter(it => canAccess(it.access, roles)) }))
+    .map(g => ({
+      ...g,
+      items: g.items.filter(it => canAccess(it.access, roles) && (!it.module || modules.includes(it.module))),
+    }))
     .filter(g => g.items.length > 0)
 
   const isEmployee = roles.length === 0 || !roles.some(r => ['super_admin', 'hr_manager', 'supervisor'].includes(r))

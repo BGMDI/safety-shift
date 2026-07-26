@@ -22,6 +22,13 @@ model Tenant {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  // ── التحكم بالوحدات والاشتراك من لوحة مالك المنصة ──
+  enabledModules        SystemModule[]         // الأقسام المفعّلة فعلياً لهذه الشركة (الموظفون والهيكل التنظيمي أساسيان دائماً بلا حاجة لإدراجهما)
+  subscriptionTemplateId String?
+  subscriptionTemplate   SubscriptionTemplate? @relation(fields: [subscriptionTemplateId], references: [id])
+  subscriptionStartsAt   DateTime?
+  subscriptionEndsAt     DateTime?             // عند تجاوزه يُقفل الدخول تلقائياً (planStatus → EXPIRED)
+
   branches          Branch[]
   departments       Department[]
   jobTitles         JobTitle[]
@@ -52,6 +59,49 @@ enum PlanStatus {
   ACTIVE
   EXPIRED
   CANCELLED
+}
+
+// =============================
+// لوحة مالك المنصة (Platform Owner)
+// =============================
+
+/// حساب مالك المنصة — منفصل تماماً عن جدول الموظفين، بلا أي علاقة بشركة معيّنة
+model PlatformAdmin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  createdAt    DateTime @default(now())
+
+  @@map("platform_admins")
+}
+
+/// كل قسم/ميزة يمكن تفعيلها أو تعطيلها لشركة معيّنة — الموظفون والهيكل التنظيمي دائماً متاحان بلا حاجة للإدراج هنا
+enum SystemModule {
+  ATTENDANCE
+  SHIFTS
+  LEAVES
+  PAYROLL
+  CUSTODY
+  UNIFORMS
+  ONBOARDING
+  APPROVALS
+  ROLES
+  AUDIT
+}
+
+/// خطة اشتراك جاهزة (أساسي / احترافي / متكامل...) — تُسند لشركة عند إنشائها، وتبقى الشركة قابلة للتخصيص لاحقاً بعدها
+model SubscriptionTemplate {
+  id           String         @id @default(uuid())
+  name         String
+  modules      SystemModule[]
+  monthlyPrice Decimal?       @db.Decimal(10, 2)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+
+  tenants      Tenant[]
+
+  @@map("subscription_templates")
 }
 
 // =============================
@@ -308,6 +358,7 @@ model Shift {
   tenant          Tenant          @relation(fields: [tenantId], references: [id])
   branch          Branch          @relation(fields: [branchId], references: [id])
   employeeShifts  EmployeeShift[]
+  rotationSteps   RotationStep[]
 
   @@map("shifts")
 }
@@ -334,18 +385,32 @@ model RotationPlan {
   id              String   @id @default(uuid())
   tenantId        String
   name            String
-  shiftIds        String[]                          // ترتيب الشفتات في الدورة
-  rotateEveryDays Int      @default(3)              // قلب الشفت كل N أيام
   restMode        String   @default("AT_ROTATION")  // AT_ROTATION: راحة عند القلبة | WEEKLY: راحة أسبوعية
-  restDays        Int      @default(1)              // عدد أيام الراحة عند القلبة
+  restDays        Int      @default(1)              // عدد أيام الراحة عند القلبة (تُضاف كخطوة راحة بعد آخر شفت)
   weeklyRestDays  Int[]    @default([])             // أيام الراحة الأسبوعية (0=الأحد .. 6=السبت)
   startDate       DateTime
   createdAt       DateTime @default(now())
 
   tenant Tenant          @relation(fields: [tenantId], references: [id])
   groups RotationGroup[]
+  steps  RotationStep[]
 
   @@map("rotation_plans")
+}
+
+/// خطوة واحدة في دورة التدوير — كل شفت له عدد أيام خاص به (مثال: 3 أيام صباحي، يومان مسائي، يوم ليلي)
+model RotationStep {
+  id      String @id @default(uuid())
+  planId  String
+  order   Int
+  shiftId String
+  days    Int    // عدد أيام هذا الشفت تحديداً ضمن هذه الخطوة من الدورة
+
+  plan  RotationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  shift Shift        @relation(fields: [shiftId], references: [id])
+
+  @@unique([planId, order])
+  @@map("rotation_steps")
 }
 
 model RotationGroup {

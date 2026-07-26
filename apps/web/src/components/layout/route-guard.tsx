@@ -3,24 +3,24 @@ import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { decodeToken } from '../../lib/auth'
 
-/** الصلاحية المطلوبة لكل مسار (بادئة المسار) */
-const ROUTE_ACCESS: { prefix: string; access: 'all' | 'mgmt' | 'hr' | 'super' }[] = [
+/** الصلاحية والقسم المطلوبان لكل مسار (بادئة المسار) — القسم اختياري لأن بعضها أساسي دائماً */
+const ROUTE_ACCESS: { prefix: string; access: 'all' | 'mgmt' | 'hr' | 'super'; module?: string }[] = [
   { prefix: '/me',          access: 'all' },
   { prefix: '/employees',   access: 'mgmt' },
   { prefix: '/departments', access: 'mgmt' },
   { prefix: '/branches',    access: 'mgmt' },
   { prefix: '/job-titles',  access: 'mgmt' },
-  { prefix: '/leaves',      access: 'mgmt' },
-  { prefix: '/onboarding',  access: 'mgmt' },
-  { prefix: '/custody',     access: 'mgmt' },
-  { prefix: '/uniforms',    access: 'mgmt' },
-  { prefix: '/attendance',  access: 'mgmt' },
-  { prefix: '/shifts',      access: 'mgmt' },
+  { prefix: '/leaves',      access: 'mgmt', module: 'LEAVES' },
+  { prefix: '/onboarding',  access: 'mgmt', module: 'ONBOARDING' },
+  { prefix: '/custody',     access: 'mgmt', module: 'CUSTODY' },
+  { prefix: '/uniforms',    access: 'mgmt', module: 'UNIFORMS' },
+  { prefix: '/attendance',  access: 'mgmt', module: 'ATTENDANCE' },
+  { prefix: '/shifts',      access: 'mgmt', module: 'SHIFTS' },
   { prefix: '/dashboard',   access: 'mgmt' },
-  { prefix: '/payroll',     access: 'hr' },
-  { prefix: '/approvals',   access: 'hr' },
-  { prefix: '/audit',       access: 'hr' },
-  { prefix: '/roles',       access: 'super' },
+  { prefix: '/payroll',     access: 'hr', module: 'PAYROLL' },
+  { prefix: '/approvals',   access: 'hr', module: 'APPROVALS' },
+  { prefix: '/audit',       access: 'hr', module: 'AUDIT' },
+  { prefix: '/roles',       access: 'super', module: 'ROLES' },
   { prefix: '/settings',    access: 'mgmt' },
 ]
 
@@ -53,11 +53,13 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     }
 
     const rule = ROUTE_ACCESS.find(r => pathname.startsWith(r.prefix))
-    // مسار غير معروف → اسمح (سيتحقق الخادم)، معروف → طبّق القاعدة
-    if (!rule || hasAccess(rule.access, token.roles ?? [])) {
+    // مسار غير معروف → اسمح (سيتحقق الخادم)، معروف → طبّق قاعدة الدور وقاعدة القسم المفعّل معاً
+    const roleOk = !rule || hasAccess(rule.access, token.roles ?? [])
+    const moduleOk = !rule?.module || (token.modules ?? []).includes(rule.module)
+    if (roleOk && moduleOk) {
       setAllowed(true)
     } else {
-      // موظف يحاول الوصول لصفحة إدارية → أعده لصفحته
+      // موظف يحاول الوصول لصفحة غير مسموحة له أو غير مفعّلة في باقة شركته → أعده لصفحته
       router.replace('/me')
     }
   }, [pathname, router])

@@ -2,14 +2,17 @@ import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nes
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
+import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { PayrollService } from './payroll.service'
 import { JwtPayload } from '@shift-saas/types'
 
 @ApiTags('Payroll')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@RequiresModule('PAYROLL')
 @Controller('payroll')
 export class PayrollController {
   constructor(private svc: PayrollService) {}

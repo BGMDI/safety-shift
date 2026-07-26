@@ -7,6 +7,7 @@ export interface JwtPayload {
   tenantId: string
   email: string
   roles: string[]
+  modules: string[]   // الأقسام المفعّلة في اشتراك الشركة — لتصفية القائمة الجانبية والمسارات في الواجهة
 }
 
 export interface AuthTokens {

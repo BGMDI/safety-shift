@@ -20,6 +20,8 @@ import { AuditModule } from './modules/audit/audit.module'
 import { RotationsModule } from './modules/rotations/rotations.module'
 import { ApprovalsModule } from './modules/approvals/approvals.module'
 import { OnboardingModule } from './modules/onboarding/onboarding.module'
+import { PlatformAuthModule } from './modules/platform-auth/platform-auth.module'
+import { PlatformModule } from './modules/platform/platform.module'
 
 @Module({
   imports: [
@@ -43,6 +45,8 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module'
     RotationsModule,
     ApprovalsModule,
     OnboardingModule,
+    PlatformAuthModule,
+    PlatformModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

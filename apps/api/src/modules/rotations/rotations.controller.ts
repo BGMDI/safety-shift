@@ -2,14 +2,17 @@ import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@n
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
+import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { RotationsService } from './rotations.service'
 import { JwtPayload } from '@shift-saas/types'
 
 @ApiTags('Rotations')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@RequiresModule('SHIFTS')
 @Controller('rotations')
 export class RotationsController {
   constructor(private svc: RotationsService) {}
