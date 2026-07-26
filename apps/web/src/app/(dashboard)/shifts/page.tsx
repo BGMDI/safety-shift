@@ -357,10 +357,6 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
 
   const createPlan = async () => {
     if (!form.name.trim() || !form.steps.length) return
-    if (form.restMode === 'AFTER_N_DAYS' && form.workDaysBeforeRest < stepsSum) {
-      alert(`عدد أيام العمل قبل الراحة (${form.workDaysBeforeRest}) أقل من مجموع أيام الشفتات (${stepsSum}) — زده حتى لا تُسقط بعض الشفتات من الجدول`)
-      return
-    }
     setSaving(true)
     try {
       await api.post('/rotations', {
@@ -529,11 +525,7 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">نظام الراحة</label>
-              <select value={form.restMode} onChange={e => setForm(f => ({
-                ...f,
-                restMode: e.target.value,
-                workDaysBeforeRest: e.target.value === 'AFTER_N_DAYS' ? Math.max(f.workDaysBeforeRest, stepsSum, 1) : f.workDaysBeforeRest,
-              }))} className={inp}>
+              <select value={form.restMode} onChange={e => setForm(f => ({ ...f, restMode: e.target.value }))} className={inp}>
                 <option value="AT_ROTATION">راحة عند قلبة الشفت</option>
                 <option value="AFTER_N_DAYS">راحة بعد عدد أيام محدد</option>
                 <option value="WEEKLY">راحة أسبوعية (أيام ثابتة)</option>
@@ -552,11 +544,11 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
               <>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">أيام العمل قبل الراحة</label>
-                  <input type="number" min={stepsSum || 1} max={60} value={form.workDaysBeforeRest}
+                  <input type="number" min={1} max={60} value={form.workDaysBeforeRest}
                     onChange={e => setForm(f => ({ ...f, workDaysBeforeRest: Number(e.target.value) }))} className={inp} />
-                  {stepsSum > 0 && (
-                    <p className="text-xs mt-1" style={{ color: form.workDaysBeforeRest < stepsSum ? '#dc2626' : '#9ca3af' }}>
-                      الحد الأدنى {stepsSum} (مجموع أيام الشفتات) — أقل من ذلك يُسقط بعض الشفتات من الجدول
+                  {stepsSum > 0 && form.workDaysBeforeRest < stepsSum && (
+                    <p className="text-xs mt-1 text-gray-400">
+                      أقل من مجموع أيام الشفتات ({stepsSum}) — ستظهر الشفتات بالتناوب عبر عدة فترات عمل متتالية بدل ظهورها كلها في كل مرة
                     </p>
                   )}
                 </div>

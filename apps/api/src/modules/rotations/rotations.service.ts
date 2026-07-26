@@ -13,42 +13,21 @@ const dateOnly = (d: Date) => d.toISOString().slice(0, 10)
 @Injectable()
 export class RotationsService {
 
-  /* ── بناء دورة التدوير: كتلة لكل خطوة بعدد أيامها الخاص + كتلة راحة ──
-     AT_ROTATION / WEEKLY: الراحة (إن وُجدت) تُضاف بعد إتمام دورة الشفتات كاملة
-     AFTER_N_DAYS: فترة العمل قبل الراحة رقم مستقل يحدده المستخدم، وتُكرَّر خطوات الشفتات
-     (أو تُقطَع) حتى تملأ هذه الفترة بالضبط، بغض النظر عن مجموع أيام الخطوات */
-  private buildSlots(plan: { steps: StepInput[]; restMode: string; restDays: number; workDaysBeforeRest?: number }) {
+  /* ── بناء دورة الشفتات من الخطوات: كتلة لكل خطوة بعدد أيامها الخاص ── */
+  private buildStepSlots(steps: StepInput[]) {
     const stepSlots: Slot[] = []
     let stepsCycle = 0
-    for (const step of plan.steps) {
+    for (const step of steps) {
       const len = Math.max(1, step.days)
       stepSlots.push({ shiftId: step.shiftId, start: stepsCycle, len })
       stepsCycle += len
     }
+    return { stepSlots, stepsCycle }
+  }
 
-    if (plan.restMode === 'AFTER_N_DAYS') {
-      const workPeriod = Math.max(1, plan.workDaysBeforeRest || stepsCycle || 1)
-      const slots: Slot[] = []
-      let acc = 0
-      if (stepsCycle > 0) {
-        while (acc < workPeriod) {
-          for (const s of stepSlots) {
-            if (acc >= workPeriod) break
-            const len = Math.min(s.len, workPeriod - acc)
-            slots.push({ shiftId: s.shiftId, start: acc, len })
-            acc += len
-          }
-        }
-      } else {
-        acc = workPeriod
-      }
-      if (plan.restDays > 0) {
-        slots.push({ shiftId: null, start: acc, len: plan.restDays })
-        acc += plan.restDays
-      }
-      return { slots, cycle: acc }
-    }
-
+  /* ── بناء دورة التدوير لوضعي AT_ROTATION وWEEKLY: الشفتات كاملة ثم راحة عند القلبة (لـ AT_ROTATION فقط) ── */
+  private buildSlots(plan: { steps: StepInput[]; restMode: string; restDays: number }) {
+    const { stepSlots, stepsCycle } = this.buildStepSlots(plan.steps)
     const slots: Slot[] = [...stepSlots]
     let acc = stepsCycle
     if (plan.restMode === 'AT_ROTATION' && plan.restDays > 0) {
@@ -58,12 +37,34 @@ export class RotationsService {
     return { slots, cycle: acc }
   }
 
-  /* ── شفت المجموعة رقم gi في اليوم dayIndex منذ بداية الخطة ──
+  /* ── شفت المجموعة رقم gi في اليوم dayIndex منذ بداية الخطة (لوضعي AT_ROTATION وWEEKLY) ──
      كل مجموعة تبدأ من كتلة مختلفة لضمان تغطية كل الشفتات في نفس اليوم */
   private slotFor(slots: Slot[], cycle: number, gi: number, dayIndex: number): string | null {
     const offset = slots[gi % slots.length].start
     const pos = (((dayIndex + offset) % cycle) + cycle) % cycle
     const slot = slots.find(s => pos >= s.start && pos < s.start + s.len)
+    return slot?.shiftId ?? null
+  }
+
+  /* ── شفت المجموعة رقم gi في اليوم dayIndex لوضع AFTER_N_DAYS ──
+     فترة العمل قبل الراحة (workPeriod) رقم مستقل تماماً عن مجموع أيام خطوات الشفتات (stepsCycle).
+     دورة الشفتات لا تُعاد من الصفر مع كل فترة عمل، بل تستمر تراكمياً عبر الدورات — فلو كانت فترة
+     العمل أقصر من دورة الشفتات، تظهر كل الشفتات بالتناوب عبر عدة فترات عمل متتالية بدلاً من أن
+     تُسقَط الشفتات المتأخرة في الترتيب نهائياً */
+  private afterNDaysShiftFor(
+    stepSlots: Slot[], stepsCycle: number, workPeriod: number, restDays: number,
+    groupCount: number, gi: number, dayIndex: number,
+  ): string | null {
+    const outerCycle = workPeriod + restDays
+    if (outerCycle <= 0 || stepsCycle <= 0) return null
+    const groupOffset = groupCount > 0 ? Math.floor((gi * outerCycle) / groupCount) : 0
+    const shifted = dayIndex + groupOffset
+    const pos = ((shifted % outerCycle) + outerCycle) % outerCycle
+    if (pos >= workPeriod) return null // راحة
+    const fullCycles = Math.floor(shifted / outerCycle)
+    const workDayIndex = fullCycles * workPeriod + pos
+    const stepPos = ((workDayIndex % stepsCycle) + stepsCycle) % stepsCycle
+    const slot = stepSlots.find(s => stepPos >= s.start && stepPos < s.start + s.len)
     return slot?.shiftId ?? null
   }
 
@@ -74,10 +75,27 @@ export class RotationsService {
     windowStart: Date,
     days: number,
   ) {
-    const { slots, cycle } = this.buildSlots(plan)
     const planStart = new Date(dateOnly(plan.startDate))
     const rows: Array<{ date: string; weekday: number; cells: (string | null)[] }> = []
 
+    if (plan.restMode === 'AFTER_N_DAYS') {
+      const { stepSlots, stepsCycle } = this.buildStepSlots(plan.steps)
+      const workPeriod = Math.max(1, plan.workDaysBeforeRest || stepsCycle || 1)
+      const restDays = Math.max(0, plan.restDays)
+      for (let d = 0; d < days; d++) {
+        const date = new Date(windowStart.getTime() + d * DAY_MS)
+        const dayIndex = Math.round((date.getTime() - planStart.getTime()) / DAY_MS)
+        const weekday = date.getUTCDay()
+        const cells: (string | null)[] = []
+        for (let gi = 0; gi < groupCount; gi++) {
+          cells.push(dayIndex < 0 ? null : this.afterNDaysShiftFor(stepSlots, stepsCycle, workPeriod, restDays, groupCount, gi, dayIndex))
+        }
+        rows.push({ date: dateOnly(date), weekday, cells })
+      }
+      return rows
+    }
+
+    const { slots, cycle } = this.buildSlots(plan)
     for (let d = 0; d < days; d++) {
       const date = new Date(windowStart.getTime() + d * DAY_MS)
       const dayIndex = Math.round((date.getTime() - planStart.getTime()) / DAY_MS)
@@ -156,17 +174,8 @@ export class RotationsService {
       if (!s.days || s.days < 1) throw new BadRequestException('عدد أيام كل خطوة يجب أن يكون 1 على الأقل')
     }
     const restMode = dto.restMode === 'WEEKLY' ? 'WEEKLY' : dto.restMode === 'AFTER_N_DAYS' ? 'AFTER_N_DAYS' : 'AT_ROTATION'
-    if (restMode === 'AFTER_N_DAYS') {
-      if (!dto.workDaysBeforeRest || dto.workDaysBeforeRest < 1) {
-        throw new BadRequestException('حدد عدد أيام العمل قبل الراحة (1 على الأقل)')
-      }
-      // لو كانت الفترة أقصر من مجموع أيام خطوات الشفتات، تُقتطع بعض الشفتات من الجدول ولا تظهر أبداً
-      const stepsSum = dto.steps.reduce((sum, s) => sum + Math.max(1, s.days), 0)
-      if (dto.workDaysBeforeRest < stepsSum) {
-        throw new BadRequestException(
-          `عدد أيام العمل قبل الراحة (${dto.workDaysBeforeRest}) أقل من مجموع أيام الشفتات في الدورة (${stepsSum}) — بعض الشفتات لن تظهر في الجدول. زد العدد إلى ${stepsSum} على الأقل أو قلّل أيام الشفتات`,
-        )
-      }
+    if (restMode === 'AFTER_N_DAYS' && (!dto.workDaysBeforeRest || dto.workDaysBeforeRest < 1)) {
+      throw new BadRequestException('حدد عدد أيام العمل قبل الراحة (1 على الأقل)')
     }
 
     // تحقق أن الشفتات تابعة لنفس الشركة
