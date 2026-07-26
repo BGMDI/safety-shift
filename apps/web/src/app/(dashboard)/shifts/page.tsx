@@ -261,7 +261,7 @@ interface RotStep { id: string; order: number; days: number; shift: { id: string
 interface RotPlan {
   id: string; name: string
   steps: RotStep[]
-  restMode: string; restDays: number; weeklyRestDays: number[]
+  restMode: string; restDays: number; weeklyRestDays: number[]; workDaysBeforeRest: number
   startDate: string
   groups: RotGroup[]
 }
@@ -296,6 +296,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
     restMode: 'AT_ROTATION',
     restDays: 1,
     weeklyRestDays: [] as number[],
+    workDaysBeforeRest: 7,
     startDate: localToday(),
     groupCount: 0, // 0 = تلقائي
   })
@@ -316,7 +317,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
   const load = () => api.get('/rotations').then(r => setPlans(r.data)).catch(() => {})
   useEffect(() => { load() }, [])
 
-  const suggestedGroups = form.steps.length + (form.restMode === 'AT_ROTATION' && form.restDays > 0 ? 1 : 0)
+  const suggestedGroups = form.steps.length + ((form.restMode === 'AT_ROTATION' || form.restMode === 'AFTER_N_DAYS') && form.restDays > 0 ? 1 : 0)
 
   const toggleShift = (id: string) => {
     setForm(f => ({
@@ -347,7 +348,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
         ...form,
         groupCount: form.groupCount || suggestedGroups,
       })
-      setForm({ name: '', steps: [], restMode: 'AT_ROTATION', restDays: 1, weeklyRestDays: [], startDate: localToday(), groupCount: 0 })
+      setForm({ name: '', steps: [], restMode: 'AT_ROTATION', restDays: 1, weeklyRestDays: [], workDaysBeforeRest: 7, startDate: localToday(), groupCount: 0 })
       setShowCreate(false)
       load()
     } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
@@ -406,6 +407,8 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
   const restLabel = (p: RotPlan) =>
     p.restMode === 'WEEKLY'
       ? `راحة أسبوعية: ${p.weeklyRestDays.map(d => DAYS[d]).join('، ') || '—'}`
+      : p.restMode === 'AFTER_N_DAYS'
+      ? `راحة ${p.restDays} يوم بعد كل ${p.workDaysBeforeRest} يوم عمل`
       : `راحة ${p.restDays} يوم عند القلبة`
 
   return (
@@ -489,16 +492,35 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
               <label className="text-xs text-gray-500 mb-1 block">نظام الراحة</label>
               <select value={form.restMode} onChange={e => setForm(f => ({ ...f, restMode: e.target.value }))} className={inp}>
                 <option value="AT_ROTATION">راحة عند قلبة الشفت</option>
+                <option value="AFTER_N_DAYS">راحة بعد عدد أيام محدد</option>
                 <option value="WEEKLY">راحة أسبوعية (أيام ثابتة)</option>
               </select>
             </div>
-            {form.restMode === 'AT_ROTATION' ? (
+
+            {form.restMode === 'AT_ROTATION' && (
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">أيام الراحة عند القلبة</label>
-                <input type="number" min={0} max={7} value={form.restDays}
+                <input type="number" min={0} max={30} value={form.restDays}
                   onChange={e => setForm(f => ({ ...f, restDays: Number(e.target.value) }))} className={inp} />
               </div>
-            ) : (
+            )}
+
+            {form.restMode === 'AFTER_N_DAYS' && (
+              <>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">أيام العمل قبل الراحة</label>
+                  <input type="number" min={1} max={60} value={form.workDaysBeforeRest}
+                    onChange={e => setForm(f => ({ ...f, workDaysBeforeRest: Number(e.target.value) }))} className={inp} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">أيام الراحة</label>
+                  <input type="number" min={0} max={30} value={form.restDays}
+                    onChange={e => setForm(f => ({ ...f, restDays: Number(e.target.value) }))} className={inp} />
+                </div>
+              </>
+            )}
+
+            {form.restMode === 'WEEKLY' && (
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">عدد المجموعات</label>
                 <input type="number" min={1} max={8} value={form.groupCount || suggestedGroups}
@@ -522,7 +544,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
             </div>
           )}
 
-          {form.restMode === 'AT_ROTATION' && (
+          {(form.restMode === 'AT_ROTATION' || form.restMode === 'AFTER_N_DAYS') && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">عدد المجموعات</label>

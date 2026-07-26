@@ -13,15 +13,44 @@ const dateOnly = (d: Date) => d.toISOString().slice(0, 10)
 @Injectable()
 export class RotationsService {
 
-  /* ── بناء دورة التدوير: كتلة لكل خطوة بعدد أيامها الخاص + كتلة راحة عند القلبة ── */
-  private buildSlots(plan: { steps: StepInput[]; restMode: string; restDays: number }) {
-    const slots: Slot[] = []
-    let acc = 0
+  /* ── بناء دورة التدوير: كتلة لكل خطوة بعدد أيامها الخاص + كتلة راحة ──
+     AT_ROTATION / WEEKLY: الراحة (إن وُجدت) تُضاف بعد إتمام دورة الشفتات كاملة
+     AFTER_N_DAYS: فترة العمل قبل الراحة رقم مستقل يحدده المستخدم، وتُكرَّر خطوات الشفتات
+     (أو تُقطَع) حتى تملأ هذه الفترة بالضبط، بغض النظر عن مجموع أيام الخطوات */
+  private buildSlots(plan: { steps: StepInput[]; restMode: string; restDays: number; workDaysBeforeRest?: number }) {
+    const stepSlots: Slot[] = []
+    let stepsCycle = 0
     for (const step of plan.steps) {
       const len = Math.max(1, step.days)
-      slots.push({ shiftId: step.shiftId, start: acc, len })
-      acc += len
+      stepSlots.push({ shiftId: step.shiftId, start: stepsCycle, len })
+      stepsCycle += len
     }
+
+    if (plan.restMode === 'AFTER_N_DAYS') {
+      const workPeriod = Math.max(1, plan.workDaysBeforeRest || stepsCycle || 1)
+      const slots: Slot[] = []
+      let acc = 0
+      if (stepsCycle > 0) {
+        while (acc < workPeriod) {
+          for (const s of stepSlots) {
+            if (acc >= workPeriod) break
+            const len = Math.min(s.len, workPeriod - acc)
+            slots.push({ shiftId: s.shiftId, start: acc, len })
+            acc += len
+          }
+        }
+      } else {
+        acc = workPeriod
+      }
+      if (plan.restDays > 0) {
+        slots.push({ shiftId: null, start: acc, len: plan.restDays })
+        acc += plan.restDays
+      }
+      return { slots, cycle: acc }
+    }
+
+    const slots: Slot[] = [...stepSlots]
+    let acc = stepsCycle
     if (plan.restMode === 'AT_ROTATION' && plan.restDays > 0) {
       slots.push({ shiftId: null, start: acc, len: plan.restDays })
       acc += plan.restDays
@@ -40,7 +69,7 @@ export class RotationsService {
 
   /* ── مصفوفة الجدول: يوم × مجموعة → شفت أو راحة ── */
   private buildMatrix(
-    plan: { steps: StepInput[]; restMode: string; restDays: number; weeklyRestDays: number[]; startDate: Date },
+    plan: { steps: StepInput[]; restMode: string; restDays: number; weeklyRestDays: number[]; workDaysBeforeRest?: number; startDate: Date },
     groupCount: number,
     windowStart: Date,
     days: number,
@@ -110,6 +139,7 @@ export class RotationsService {
     restMode: string
     restDays?: number
     weeklyRestDays?: number[]
+    workDaysBeforeRest?: number // لوضع AFTER_N_DAYS: عدد أيام العمل قبل الراحة
     startDate: string
     groupCount?: number
   }) {
@@ -118,6 +148,10 @@ export class RotationsService {
     for (const s of dto.steps) {
       if (!s.shiftId) throw new BadRequestException('كل خطوة تحتاج شفتاً محدَّداً')
       if (!s.days || s.days < 1) throw new BadRequestException('عدد أيام كل خطوة يجب أن يكون 1 على الأقل')
+    }
+    const restMode = dto.restMode === 'WEEKLY' ? 'WEEKLY' : dto.restMode === 'AFTER_N_DAYS' ? 'AFTER_N_DAYS' : 'AT_ROTATION'
+    if (restMode === 'AFTER_N_DAYS' && (!dto.workDaysBeforeRest || dto.workDaysBeforeRest < 1)) {
+      throw new BadRequestException('حدد عدد أيام العمل قبل الراحة (1 على الأقل)')
     }
 
     // تحقق أن الشفتات تابعة لنفس الشركة
@@ -131,9 +165,10 @@ export class RotationsService {
       data: {
         tenantId,
         name: dto.name.trim(),
-        restMode: dto.restMode === 'WEEKLY' ? 'WEEKLY' : 'AT_ROTATION',
+        restMode,
         restDays: Math.max(0, dto.restDays ?? 1),
         weeklyRestDays: dto.weeklyRestDays ?? [],
+        workDaysBeforeRest: restMode === 'AFTER_N_DAYS' ? Math.max(1, dto.workDaysBeforeRest!) : 0,
         startDate: new Date(dto.startDate),
         steps: {
           create: dto.steps.map((s, i) => ({ order: i + 1, shiftId: s.shiftId, days: Math.max(1, s.days) })),

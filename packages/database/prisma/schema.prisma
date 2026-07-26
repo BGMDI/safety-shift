@@ -385,9 +385,10 @@ model RotationPlan {
   id              String   @id @default(uuid())
   tenantId        String
   name            String
-  restMode        String   @default("AT_ROTATION")  // AT_ROTATION: راحة عند القلبة | WEEKLY: راحة أسبوعية
-  restDays        Int      @default(1)              // عدد أيام الراحة عند القلبة (تُضاف كخطوة راحة بعد آخر شفت)
-  weeklyRestDays  Int[]    @default([])             // أيام الراحة الأسبوعية (0=الأحد .. 6=السبت)
+  restMode           String   @default("AT_ROTATION")  // AT_ROTATION: راحة عند القلبة | WEEKLY: راحة أسبوعية | AFTER_N_DAYS: راحة بعد عدد أيام محدد
+  restDays           Int      @default(1)              // عدد أيام الراحة (تُضاف كخطوة راحة بعد فترة العمل)
+  weeklyRestDays     Int[]    @default([])             // أيام الراحة الأسبوعية (0=الأحد .. 6=السبت)
+  workDaysBeforeRest Int      @default(0)              // لوضع AFTER_N_DAYS فقط: عدد أيام العمل قبل الراحة (يتجاوز مجموع أيام خطوات الشفتات)
   startDate       DateTime
   createdAt       DateTime @default(now())
 
