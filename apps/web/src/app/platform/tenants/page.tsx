@@ -81,6 +81,12 @@ export default function PlatformTenantsPage() {
     load()
   }
 
+  const reactivate = async (id: string, name: string) => {
+    if (!confirm(`إعادة تفعيل اشتراك "${name}"؟ سيستطيع موظفوها تسجيل الدخول مجدداً.`)) return
+    await platformApi.put(`/platform/tenants/${id}/reactivate`).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
+    load()
+  }
+
   const logout = () => { localStorage.removeItem('platform_access_token'); router.push('/platform/login') }
 
   if (loading) return <div className="p-6 text-center" style={{ color: 'var(--ink-3)' }}>جارٍ التحميل...</div>
@@ -177,9 +183,15 @@ export default function PlatformTenantsPage() {
                       </button>
                     ))}
                     <div className="flex-1" />
-                    <button onClick={() => suspend(t.id, t.name)} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: 'var(--crit-soft)', color: 'var(--crit)' }}>
-                      تعليق الاشتراك
-                    </button>
+                    {t.planStatus === 'CANCELLED' || t.planStatus === 'EXPIRED' ? (
+                      <button onClick={() => reactivate(t.id, t.name)} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: 'var(--good-soft)', color: 'var(--good)' }}>
+                        ✓ إعادة تفعيل
+                      </button>
+                    ) : (
+                      <button onClick={() => suspend(t.id, t.name)} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: 'var(--crit-soft)', color: 'var(--crit)' }}>
+                        تعليق الاشتراك
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

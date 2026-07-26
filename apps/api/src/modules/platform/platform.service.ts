@@ -154,4 +154,14 @@ export class PlatformService {
     if (!t) throw new NotFoundException('الشركة غير موجودة')
     return prisma.tenant.update({ where: { id }, data: { planStatus: 'CANCELLED' } })
   }
+
+  /** إعادة تفعيل شركة معلّقة — يرفض إن كانت مدة الاشتراك نفسها منتهية (يلزم تمديد بدلاً من ذلك) */
+  async reactivateTenant(id: string) {
+    const t = await prisma.tenant.findUnique({ where: { id } })
+    if (!t) throw new NotFoundException('الشركة غير موجودة')
+    if (t.subscriptionEndsAt && t.subscriptionEndsAt < new Date()) {
+      throw new BadRequestException('انتهت مدة الاشتراك — استخدم "تمديد الاشتراك" لتفعيلها من جديد')
+    }
+    return prisma.tenant.update({ where: { id }, data: { planStatus: 'ACTIVE' } })
+  }
 }

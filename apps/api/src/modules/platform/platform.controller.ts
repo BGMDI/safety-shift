@@ -27,4 +27,5 @@ export class PlatformController {
   @Put('tenants/:id/modules') updateModules(@Param('id') id: string, @Body() dto: UpdateTenantModulesDto) { return this.svc.updateTenantModules(id, dto) }
   @Put('tenants/:id/extend') extend(@Param('id') id: string, @Body() dto: ExtendSubscriptionDto) { return this.svc.extendSubscription(id, dto) }
   @Put('tenants/:id/suspend') suspend(@Param('id') id: string) { return this.svc.suspendTenant(id) }
+  @Put('tenants/:id/reactivate') reactivate(@Param('id') id: string) { return this.svc.reactivateTenant(id) }
 }
