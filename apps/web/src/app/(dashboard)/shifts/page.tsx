@@ -624,6 +624,9 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
       ) : plans.map(plan => {
         const totalMembers = plan.groups.reduce((s, g) => s + g.members.length, 0)
         const isOpen = expanded === plan.id
+        // شفتات فرع الخطة نفسه فقط — لا تعرض شفتات فرع آخر عند التثبيت
+        const planBranchId = shiftMap.get(plan.steps[0]?.shift.id)?.branch?.id
+        const planShifts = planBranchId ? shifts.filter(s => s.branch?.id === planBranchId) : shifts
         return (
           <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
 
@@ -689,7 +692,7 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
                               onChange={e => pinMember(g.id, m.employee.id, e.target.value || null)}
                               className={`w-full mt-1 border rounded px-1 py-0.5 text-[11px] ${m.pinnedShift ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
                               <option value="">🔄 يتناوب مع المجموعة</option>
-                              {shifts.map(s => <option key={s.id} value={s.id}>📌 ثابت على {s.name}</option>)}
+                              {planShifts.map(s => <option key={s.id} value={s.id}>📌 ثابت على {s.name}</option>)}
                             </select>
                           </div>
                         ))}
@@ -711,7 +714,7 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
                         onChange={e => setPinPick(p => ({ ...p, [g.id]: e.target.value }))}
                         className="w-full border rounded-lg px-1.5 py-1 text-[11px] bg-white text-gray-500">
                         <option value="">عند الإضافة: يتناوب مع المجموعة (طبيعي)</option>
-                        {shifts.map(s => <option key={s.id} value={s.id}>📌 تثبيت الموظف الجديد على {s.name}</option>)}
+                        {planShifts.map(s => <option key={s.id} value={s.id}>📌 تثبيت الموظف الجديد على {s.name}</option>)}
                       </select>
                     </div>
                   ))}
