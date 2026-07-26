@@ -37,7 +37,7 @@ export class EmployeesService {
     createdAt: true,
     branch: { select: { id: true, name: true } },
     department: { select: { id: true, name: true } },
-    jobTitle: { select: { id: true, name: true } },
+    jobTitle: { select: { id: true, name: true, isShiftEligible: true } },
     employeeRoles: { select: { role: { select: { name: true } } } },
   }
 

@@ -170,11 +170,12 @@ model Department {
 }
 
 model JobTitle {
-  id          String   @id @default(uuid())
-  tenantId    String
-  name        String
-  grade       String?
-  baseSalary  Decimal  @default(0) @db.Decimal(10, 2)
+  id              String   @id @default(uuid())
+  tenantId        String
+  name            String
+  grade           String?
+  baseSalary      Decimal  @default(0) @db.Decimal(10, 2)
+  isShiftEligible Boolean  @default(true) // هل تدخل هذه الوظيفة في جدولة الشفتات؟ (مثال: حارس أمن = نعم، مدير النظام = لا)
 
   tenant      Tenant     @relation(fields: [tenantId], references: [id])
   employees   Employee[]

@@ -14,7 +14,7 @@ export class JobTitlesService {
 
   async create(tenantId: string, dto: CreateJobTitleDto) {
     return prisma.jobTitle.create({
-      data: { tenantId, name: dto.name, grade: dto.grade, baseSalary: dto.baseSalary ?? 0 },
+      data: { tenantId, name: dto.name, grade: dto.grade, baseSalary: dto.baseSalary ?? 0, isShiftEligible: dto.isShiftEligible ?? true },
     })
   }
 

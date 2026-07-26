@@ -4,7 +4,7 @@ import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
 
 interface Shift { id: string; name: string; startTime: string; endTime: string; breakMinutes: number; minStaffing: number | null; isNightShift: boolean; workingDays: number[]; branch?: { id: string; name: string } | null }
-interface Employee { id: string; fullName: string; employeeCode: string; branch?: { id: string; name: string } | null }
+interface Employee { id: string; fullName: string; employeeCode: string; branch?: { id: string; name: string } | null; jobTitle?: { id: string; name: string; isShiftEligible: boolean } | null }
 interface BranchOpt { id: string; name: string }
 interface ScheduleEntry { employeeId: string; employeeName: string; shiftName: string; date: string; startTime: string; endTime: string }
 
@@ -22,6 +22,9 @@ export default function ShiftsPage() {
   const [schedDates, setSchedDates] = useState({ start: new Date().toISOString().split('T')[0], end: new Date(Date.now() + 6 * 86400000).toISOString().split('T')[0] })
   const [loading, setLoading] = useState(false)
 
+  // الموظفون المؤهلون لجدولة الشفتات — يُستثنى فقط من كانت وظيفته إدارية صراحةً (isShiftEligible=false)
+  const shiftEligibleEmployees = employees.filter(e => e.jobTitle?.isShiftEligible !== false)
+
   const loadShifts = () => api.get('/shifts').then(r => setShifts(r.data)).catch(() => {})
   useEffect(() => {
     loadShifts()
@@ -38,20 +41,50 @@ export default function ShiftsPage() {
     setForm({ ...form, workingDays: wd })
   }
 
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+
+  const resetShiftForm = () => setForm(f => ({
+    ...f, name: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', minStaffing: '', isNightShift: false, workingDays: [0, 1, 2, 3, 4],
+  }))
+
+  const startEditShift = (s: Shift) => {
+    setEditingShiftId(s.id)
+    setForm({
+      name: s.name, branchId: s.branch?.id ?? '', startTime: s.startTime, endTime: s.endTime,
+      breakMinutes: String(s.breakMinutes), minStaffing: s.minStaffing ? String(s.minStaffing) : '',
+      isNightShift: s.isNightShift, workingDays: s.workingDays,
+    })
+  }
+
+  const cancelEditShift = () => { setEditingShiftId(null); resetShiftForm() }
+
   const createShift = async () => {
     if (!form.name.trim()) return
     setLoading(true)
     try {
-      await api.post('/shifts', {
+      const payload = {
         ...form,
         branchId: form.branchId || undefined,
         breakMinutes: Number(form.breakMinutes),
-        minStaffing: form.minStaffing ? Number(form.minStaffing) : undefined,
-      })
-      setForm({ ...form, name: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', minStaffing: '', isNightShift: false, workingDays: [0, 1, 2, 3, 4] })
+        // عند التعديل: تفريغ الحقل يجب أن يمسح القيمة (null) لا أن يتجاهلها (undefined يعني "لا تغيّر" في Prisma)
+        minStaffing: form.minStaffing ? Number(form.minStaffing) : (editingShiftId ? null : undefined),
+      }
+      if (editingShiftId) {
+        await api.put(`/shifts/${editingShiftId}`, payload)
+        setEditingShiftId(null)
+      } else {
+        await api.post('/shifts', payload)
+      }
+      resetShiftForm()
       loadShifts()
     } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
     setLoading(false)
+  }
+
+  const deleteShift = async (s: Shift) => {
+    if (!confirm(`حذف شفت "${s.name}"؟`)) return
+    await api.delete(`/shifts/${s.id}`).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
+    loadShifts()
   }
 
   const assignShift = async () => {
@@ -105,7 +138,7 @@ export default function ShiftsPage() {
       {tab === 'shifts' && (
         <>
           <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-            <h2 className="font-semibold mb-4">إنشاء شفت جديد</h2>
+            <h2 className="font-semibold mb-4">{editingShiftId ? '✏️ تعديل الشفت' : 'إنشاء شفت جديد'}</h2>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div><label className="text-xs text-gray-500 mb-1 block">اسم الشفت *</label>
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="شفت الصباح" className={inp} /></div>
@@ -138,23 +171,30 @@ export default function ShiftsPage() {
               <input type="checkbox" id="night" checked={form.isNightShift} onChange={e => setForm({ ...form, isNightShift: e.target.checked })} />
               <label htmlFor="night" className="text-sm">شفت ليلي</label>
             </div>
-            <button onClick={createShift} disabled={loading || !form.name.trim()}
-              className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
-              + إنشاء شفت
-            </button>
+            <div className="flex gap-2">
+              <button onClick={createShift} disabled={loading || !form.name.trim()}
+                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+                {editingShiftId ? (loading ? '⏳ جارٍ الحفظ...' : '💾 حفظ التعديلات') : '+ إنشاء شفت'}
+              </button>
+              {editingShiftId && (
+                <button onClick={cancelEditShift} className="text-gray-500 text-sm px-4 py-2 rounded-lg hover:bg-gray-50">
+                  إلغاء
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
-                <tr>{['الشفت', 'الفرع', 'البداية', 'النهاية', 'الاستراحة', 'الحد الأدنى', 'أيام العمل', 'نوع'].map(h =>
+                <tr>{['الشفت', 'الفرع', 'البداية', 'النهاية', 'الاستراحة', 'الحد الأدنى', 'أيام العمل', 'نوع', ''].map(h =>
                   <th key={h} className="text-right px-4 py-3 font-medium text-gray-600">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y">
                 {shifts.length === 0
-                  ? <tr><td colSpan={8} className="text-center py-10 text-gray-400">لا توجد شفتات</td></tr>
+                  ? <tr><td colSpan={9} className="text-center py-10 text-gray-400">لا توجد شفتات</td></tr>
                   : shifts.map(s => (
-                    <tr key={s.id} className="hover:bg-gray-50">
+                    <tr key={s.id} className={`hover:bg-gray-50 ${editingShiftId === s.id ? 'bg-blue-50/50' : ''}`}>
                       <td className="px-4 py-3 font-medium">{s.name}</td>
                       <td className="px-4 py-3">
                         {s.branch
@@ -167,6 +207,12 @@ export default function ShiftsPage() {
                       <td className="px-4 py-3">{s.minStaffing ? <span className="text-gray-700">{s.minStaffing} موظف</span> : <span className="text-gray-300 text-xs">—</span>}</td>
                       <td className="px-4 py-3 text-xs">{s.workingDays.map(d => DAYS[d]).join('، ')}</td>
                       <td className="px-4 py-3">{s.isNightShift ? '🌙 ليلي' : '☀️ نهاري'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1 justify-end">
+                          <button onClick={() => startEditShift(s)} className="text-blue-600 text-xs px-2.5 py-1.5 rounded-lg hover:bg-blue-50">تعديل</button>
+                          <button onClick={() => deleteShift(s)} className="text-red-500 text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-50">حذف</button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
               </tbody>
@@ -175,7 +221,7 @@ export default function ShiftsPage() {
         </>
       )}
 
-      {tab === 'rotation' && <RotationTab shifts={shifts} employees={employees} branches={branches} />}
+      {tab === 'rotation' && <RotationTab shifts={shifts} employees={shiftEligibleEmployees} branches={branches} />}
 
       {tab === 'assign' && (() => {
         const selectedEmployee = employees.find(e => e.id === assign.employeeId)
@@ -189,7 +235,7 @@ export default function ShiftsPage() {
             <div><label className="text-xs text-gray-500 mb-1 block">الموظف *</label>
               <select value={assign.employeeId} onChange={e => setAssign({ ...assign, employeeId: e.target.value, shiftId: '' })} className={inp}>
                 <option value="">-- اختر موظفاً --</option>
-                {employees.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.employeeCode}){e.branch ? ` — ${e.branch.name}` : ''}</option>)}
+                {shiftEligibleEmployees.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.employeeCode}){e.branch ? ` — ${e.branch.name}` : ''}</option>)}
               </select>
             </div>
             <div><label className="text-xs text-gray-500 mb-1 block">الشفت *</label>

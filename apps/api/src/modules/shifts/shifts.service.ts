@@ -35,6 +35,46 @@ export class ShiftsService {
     return prisma.shift.create({ data: { ...data, branchId: branchId!, tenantId } })
   }
 
+  async update(tenantId: string, id: string, data: {
+    branchId?: string
+    name?: string
+    startTime?: string
+    endTime?: string
+    breakMinutes?: number
+    isNightShift?: boolean
+    workingDays?: number[]
+    minStaffing?: number | null
+  }) {
+    const existing = await prisma.shift.findFirst({ where: { id, tenantId } })
+    if (!existing) throw new NotFoundException('الشفت غير موجود')
+
+    let branchId = data.branchId
+    if (branchId) {
+      const valid = await prisma.branch.findFirst({ where: { id: branchId, tenantId } })
+      if (!valid) throw new BadRequestException('الفرع غير صالح')
+    }
+
+    return prisma.shift.update({
+      where: { id },
+      data: { ...data, branchId },
+      include: { branch: { select: { id: true, name: true } } },
+    })
+  }
+
+  async remove(tenantId: string, id: string) {
+    const shift = await prisma.shift.findFirst({
+      where: { id, tenantId },
+      include: { _count: { select: { employeeShifts: true, rotationSteps: true, pinnedByMembers: true } } },
+    })
+    if (!shift) throw new NotFoundException('الشفت غير موجود')
+    const inUse = shift._count.employeeShifts + shift._count.rotationSteps + shift._count.pinnedByMembers
+    if (inUse > 0) {
+      throw new BadRequestException('لا يمكن حذف هذا الشفت — مستخدم في تعيينات موظفين أو خطط تدوير حالياً')
+    }
+    await prisma.shift.delete({ where: { id } })
+    return { message: 'تم حذف الشفت' }
+  }
+
   async assignEmployeeToShift(tenantId: string, data: {
     employeeId: string
     shiftId: string

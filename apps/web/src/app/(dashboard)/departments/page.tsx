@@ -11,7 +11,7 @@ interface EmpOption { id: string; fullName: string; employeeCode: string }
 interface Dept     { id: string; name: string; headEmployeeId?: string | null; head?: EmpOption | null; _count: { employees: number } }
 interface Branch   { id: string; name: string; location: string | null; managerEmployeeId?: string | null; manager?: EmpOption | null; _count: { employees: number }; departments: Dept[] }
 interface FreeDept { id: string; name: string; branch: { id: string; name: string } | null; headEmployeeId?: string | null; head?: EmpOption | null; _count: { employees: number; children: number } }
-interface JobTitle { id: string; name: string; grade: string | null; baseSalary: number; _count: { employees: number } }
+interface JobTitle { id: string; name: string; grade: string | null; baseSalary: number; isShiftEligible: boolean; _count: { employees: number } }
 
 const inp = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full bg-white'
 
@@ -401,7 +401,7 @@ function OrgTab() {
 ══════════════════════════════════════════ */
 function JobsTab() {
   const [titles, setTitles]   = useState<JobTitle[]>([])
-  const [form, setForm]       = useState({ name: '', grade: '', baseSalary: '' })
+  const [form, setForm]       = useState({ name: '', grade: '', baseSalary: '', isShiftEligible: true })
   const [saving, setSaving]   = useState(false)
   const [editId, setEditId]   = useState<string | null>(null)
   const [editData, setEditData] = useState({ name: '', grade: '', baseSalary: '' })
@@ -416,8 +416,9 @@ function JobsTab() {
       name: form.name,
       grade: form.grade || undefined,
       baseSalary: Number(form.baseSalary) || 0,
+      isShiftEligible: form.isShiftEligible,
     }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
-    setForm({ name: '', grade: '', baseSalary: '' }); setSaving(false); load()
+    setForm({ name: '', grade: '', baseSalary: '', isShiftEligible: true }); setSaving(false); load()
   }
 
   const update = async (id: string) => {
@@ -427,6 +428,12 @@ function JobsTab() {
       baseSalary: Number(editData.baseSalary) || 0,
     }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
     setEditId(null); load()
+  }
+
+  const toggleShiftEligible = async (t: JobTitle) => {
+    await api.put(`/job-titles/${t.id}`, { isShiftEligible: !t.isShiftEligible })
+      .catch(e => alert(e.response?.data?.message ?? 'خطأ'))
+    load()
   }
 
   const remove = async (id: string) => {
@@ -459,6 +466,11 @@ function JobsTab() {
               type="number" min="0" placeholder="0" className={inp} />
           </div>
         </div>
+        <label className="flex items-center gap-2 mt-3 text-sm text-gray-600 cursor-pointer w-fit">
+          <input type="checkbox" checked={form.isShiftEligible}
+            onChange={e => setForm(p => ({ ...p, isShiftEligible: e.target.checked }))} />
+          تدخل في جدولة الشفتات (فعّلها للوظائف الميدانية مثل حارس أمن، مراقب أمن — عطّلها للوظائف الإدارية)
+        </label>
         <button onClick={create} disabled={saving || !form.name.trim()}
           className="mt-3 bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
           {saving ? '⏳ جارٍ...' : '+ إضافة مسمى وظيفي'}
@@ -477,7 +489,7 @@ function JobsTab() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                {['المسمى الوظيفي', 'الدرجة', 'الراتب الأساسي', 'الموظفون', ''].map(h => (
+                {['المسمى الوظيفي', 'الدرجة', 'الراتب الأساسي', 'جدولة الشفتات', 'الموظفون', ''].map(h => (
                   <th key={h} className="text-right px-4 py-3 font-medium text-gray-600 text-sm">{h}</th>
                 ))}
               </tr>
@@ -505,6 +517,13 @@ function JobsTab() {
                           onChange={e => setEditData(p => ({ ...p, baseSalary: e.target.value }))}
                           className="border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-28" />
                       : <span className="font-mono text-gray-700">{Number(t.baseSalary).toLocaleString('ar-SA')} ر.س</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button onClick={() => toggleShiftEligible(t)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
+                        t.isShiftEligible ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
+                      {t.isShiftEligible ? '✓ تدخل الجدولة' : '— إدارية فقط'}
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full text-xs font-medium">

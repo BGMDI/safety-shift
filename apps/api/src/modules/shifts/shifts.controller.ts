@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
@@ -26,6 +26,18 @@ export class ShiftsController {
   @Roles('super_admin', 'hr_manager')
   create(@CurrentUser() user: JwtPayload, @Body() body: any) {
     return this.shiftsService.create(user.tenantId, body)
+  }
+
+  @Put(':id')
+  @Roles('super_admin', 'hr_manager')
+  update(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() body: any) {
+    return this.shiftsService.update(user.tenantId, id, body)
+  }
+
+  @Delete(':id')
+  @Roles('super_admin', 'hr_manager')
+  remove(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.shiftsService.remove(user.tenantId, id)
   }
 
   @Post('assign')
