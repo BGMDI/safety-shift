@@ -4,7 +4,7 @@ import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
 
 interface Shift { id: string; name: string; startTime: string; endTime: string; breakMinutes: number; minStaffing: number | null; isNightShift: boolean; workingDays: number[]; branch?: { id: string; name: string } | null }
-interface Employee { id: string; fullName: string; employeeCode: string }
+interface Employee { id: string; fullName: string; employeeCode: string; branch?: { id: string; name: string } | null }
 interface BranchOpt { id: string; name: string }
 interface ScheduleEntry { employeeId: string; employeeName: string; shiftName: string; date: string; startTime: string; endTime: string }
 
@@ -175,23 +175,31 @@ export default function ShiftsPage() {
         </>
       )}
 
-      {tab === 'rotation' && <RotationTab shifts={shifts} employees={employees} />}
+      {tab === 'rotation' && <RotationTab shifts={shifts} employees={employees} branches={branches} />}
 
-      {tab === 'assign' && (
+      {tab === 'assign' && (() => {
+        const selectedEmployee = employees.find(e => e.id === assign.employeeId)
+        const assignableShifts = selectedEmployee?.branch
+          ? shifts.filter(s => s.branch?.id === selectedEmployee.branch!.id)
+          : shifts
+        return (
         <div className="bg-white rounded-xl shadow-sm p-5">
           <h2 className="font-semibold mb-4">تعيين موظف لشفت</h2>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div><label className="text-xs text-gray-500 mb-1 block">الموظف *</label>
-              <select value={assign.employeeId} onChange={e => setAssign({ ...assign, employeeId: e.target.value })} className={inp}>
+              <select value={assign.employeeId} onChange={e => setAssign({ ...assign, employeeId: e.target.value, shiftId: '' })} className={inp}>
                 <option value="">-- اختر موظفاً --</option>
-                {employees.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.employeeCode})</option>)}
+                {employees.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.employeeCode}){e.branch ? ` — ${e.branch.name}` : ''}</option>)}
               </select>
             </div>
             <div><label className="text-xs text-gray-500 mb-1 block">الشفت *</label>
               <select value={assign.shiftId} onChange={e => setAssign({ ...assign, shiftId: e.target.value })} className={inp}>
                 <option value="">-- اختر شفتاً --</option>
-                {shifts.map(s => <option key={s.id} value={s.id}>{s.name} ({s.startTime}–{s.endTime})</option>)}
+                {assignableShifts.map(s => <option key={s.id} value={s.id}>{s.name} ({s.startTime}–{s.endTime})</option>)}
               </select>
+              {selectedEmployee?.branch && assignableShifts.length < shifts.length && (
+                <p className="text-xs text-gray-400 mt-1">مقتصرة على شفتات فرع {selectedEmployee.branch.name}</p>
+              )}
             </div>
             <div><label className="text-xs text-gray-500 mb-1 block">تاريخ البداية</label>
               <input type="date" value={assign.effectiveFrom} onChange={e => setAssign({ ...assign, effectiveFrom: e.target.value })} className={inp} /></div>
@@ -201,7 +209,8 @@ export default function ShiftsPage() {
             {loading ? 'جارٍ التعيين...' : 'تعيين الشفت'}
           </button>
         </div>
-      )}
+        )
+      })()}
 
       {tab === 'schedule' && (
         <>
@@ -255,7 +264,7 @@ const inp = 'border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2
 /* ══════════════════════════════════════════
    خطط تدوير الشفتات
 ══════════════════════════════════════════ */
-interface RotMember { id: string; employee: { id: string; fullName: string; employeeCode: string } }
+interface RotMember { id: string; employee: { id: string; fullName: string; employeeCode: string }; pinnedShift?: { id: string; name: string } | null }
 interface RotGroup { id: string; name: string; order: number; members: RotMember[] }
 interface RotStep { id: string; order: number; days: number; shift: { id: string; name: string; startTime: string; endTime: string } }
 interface RotPlan {
@@ -267,7 +276,7 @@ interface RotPlan {
 }
 interface PreviewData {
   startDate: string; days: number
-  groups: { id: string; name: string; memberCount: number }[]
+  groups: { id: string; name: string; memberCount: number; pinned: { employeeId: string; employeeName: string; shiftId: string; shiftName: string }[] }[]
   matrix: { date: string; weekday: number; cells: (string | null)[] }[]
 }
 
@@ -284,10 +293,14 @@ const localToday = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employee[] }) {
+function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employees: Employee[]; branches: BranchOpt[] }) {
   const [plans, setPlans] = useState<RotPlan[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
+
+  /* فلترة الشفتات المعروضة حسب الفرع — لا تظهر شفتات فرع آخر */
+  const [branchFilter, setBranchFilter] = useState('')
+  const pickableShifts = branchFilter ? shifts.filter(s => s.branch?.id === branchFilter) : shifts
 
   /* نموذج إنشاء خطة */
   const [form, setForm] = useState({
@@ -304,6 +317,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
 
   /* إضافة أعضاء */
   const [memberPick, setMemberPick] = useState<Record<string, string>>({})
+  const [pinPick, setPinPick] = useState<Record<string, string>>({})
 
   /* المعاينة */
   const [preview, setPreview] = useState<PreviewData | null>(null)
@@ -318,6 +332,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
   useEffect(() => { load() }, [])
 
   const suggestedGroups = form.steps.length + ((form.restMode === 'AT_ROTATION' || form.restMode === 'AFTER_N_DAYS') && form.restDays > 0 ? 1 : 0)
+  const stepsSum = form.steps.reduce((sum, s) => sum + Math.max(1, s.days), 0)
 
   const toggleShift = (id: string) => {
     setForm(f => ({
@@ -342,6 +357,10 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
 
   const createPlan = async () => {
     if (!form.name.trim() || !form.steps.length) return
+    if (form.restMode === 'AFTER_N_DAYS' && form.workDaysBeforeRest < stepsSum) {
+      alert(`عدد أيام العمل قبل الراحة (${form.workDaysBeforeRest}) أقل من مجموع أيام الشفتات (${stepsSum}) — زده حتى لا تُسقط بعض الشفتات من الجدول`)
+      return
+    }
     setSaving(true)
     try {
       await api.post('/rotations', {
@@ -365,14 +384,21 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
   const addMember = async (groupId: string) => {
     const empId = memberPick[groupId]
     if (!empId) return
-    await api.post(`/rotations/groups/${groupId}/members`, { employeeIds: [empId] })
+    await api.post(`/rotations/groups/${groupId}/members`, { employeeIds: [empId], pinnedShiftId: pinPick[groupId] || undefined })
       .catch((e: any) => alert(e.response?.data?.message ?? 'خطأ'))
     setMemberPick(p => ({ ...p, [groupId]: '' }))
+    setPinPick(p => ({ ...p, [groupId]: '' }))
     load()
   }
 
   const removeMember = async (groupId: string, employeeId: string) => {
     await api.delete(`/rotations/groups/${groupId}/members/${employeeId}`).catch(() => {})
+    load()
+  }
+
+  const pinMember = async (groupId: string, employeeId: string, shiftId: string | null) => {
+    await api.put(`/rotations/groups/${groupId}/members/${employeeId}/pin`, { shiftId })
+      .catch((e: any) => alert(e.response?.data?.message ?? 'خطأ'))
     load()
   }
 
@@ -428,7 +454,7 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
       {/* نموذج إنشاء خطة */}
       {showCreate && (
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">اسم الخطة *</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -439,18 +465,31 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
               <input type="date" value={form.startDate}
                 onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className={inp} />
             </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">الفرع</label>
+              <select value={branchFilter} onChange={e => {
+                const bid = e.target.value
+                setBranchFilter(bid)
+                if (bid) setForm(f => ({ ...f, steps: f.steps.filter(st => shiftMap.get(st.shiftId)?.branch?.id === bid) }))
+              }} className={inp}>
+                <option value="">كل الفروع</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* اختيار الشفتات بالترتيب */}
           <div>
             <label className="text-xs text-gray-500 mb-2 block">
-              الشفتات في الدورة * <span className="text-gray-400">(انقر بالترتيب الذي تتقلب فيه المجموعات)</span>
+              الشفتات في الدورة * <span className="text-gray-400">(انقر بالترتيب الذي تتقلب فيه المجموعات — شفتات فرعك المحدد فقط)</span>
             </label>
-            {shifts.length === 0 ? (
-              <p className="text-xs text-red-500">أنشئ الشفتات أولاً من تبويب "الشفتات"</p>
+            {pickableShifts.length === 0 ? (
+              <p className="text-xs text-red-500">
+                {shifts.length === 0 ? 'أنشئ الشفتات أولاً من تبويب "الشفتات"' : 'لا توجد شفتات لهذا الفرع'}
+              </p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {shifts.map(s => {
+                {pickableShifts.map(s => {
                   const idx = form.steps.findIndex(st => st.shiftId === s.id)
                   return (
                     <button key={s.id} onClick={() => toggleShift(s.id)}
@@ -490,7 +529,11 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">نظام الراحة</label>
-              <select value={form.restMode} onChange={e => setForm(f => ({ ...f, restMode: e.target.value }))} className={inp}>
+              <select value={form.restMode} onChange={e => setForm(f => ({
+                ...f,
+                restMode: e.target.value,
+                workDaysBeforeRest: e.target.value === 'AFTER_N_DAYS' ? Math.max(f.workDaysBeforeRest, stepsSum, 1) : f.workDaysBeforeRest,
+              }))} className={inp}>
                 <option value="AT_ROTATION">راحة عند قلبة الشفت</option>
                 <option value="AFTER_N_DAYS">راحة بعد عدد أيام محدد</option>
                 <option value="WEEKLY">راحة أسبوعية (أيام ثابتة)</option>
@@ -509,8 +552,13 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
               <>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">أيام العمل قبل الراحة</label>
-                  <input type="number" min={1} max={60} value={form.workDaysBeforeRest}
+                  <input type="number" min={stepsSum || 1} max={60} value={form.workDaysBeforeRest}
                     onChange={e => setForm(f => ({ ...f, workDaysBeforeRest: Number(e.target.value) }))} className={inp} />
+                  {stepsSum > 0 && (
+                    <p className="text-xs mt-1" style={{ color: form.workDaysBeforeRest < stepsSum ? '#dc2626' : '#9ca3af' }}>
+                      الحد الأدنى {stepsSum} (مجموع أيام الشفتات) — أقل من ذلك يُسقط بعض الشفتات من الجدول
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">أيام الراحة</label>
@@ -629,17 +677,25 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
                         <p className="text-sm font-bold text-gray-700">{g.name}</p>
                         <span className="text-xs text-gray-400">{g.members.length}</span>
                       </div>
-                      <div className="space-y-1 mb-2 max-h-44 overflow-y-auto">
+                      <div className="space-y-1 mb-2 max-h-52 overflow-y-auto">
                         {g.members.map(m => (
-                          <div key={m.id} className="group flex items-center gap-1.5 bg-white rounded-lg px-2 py-1.5 text-xs">
-                            <span className="flex-1 text-gray-700 truncate">{m.employee.fullName}</span>
-                            <button onClick={() => removeMember(g.id, m.employee.id)}
-                              className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
+                          <div key={m.id} className="group bg-white rounded-lg px-2 py-1.5 text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <span className="flex-1 text-gray-700 truncate">{m.employee.fullName}</span>
+                              <button onClick={() => removeMember(g.id, m.employee.id)}
+                                className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
+                            </div>
+                            <select value={m.pinnedShift?.id ?? ''}
+                              onChange={e => pinMember(g.id, m.employee.id, e.target.value || null)}
+                              className={`w-full mt-1 border rounded px-1 py-0.5 text-[11px] ${m.pinnedShift ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                              <option value="">🔄 يتناوب مع المجموعة</option>
+                              {shifts.map(s => <option key={s.id} value={s.id}>📌 ثابت على {s.name}</option>)}
+                            </select>
                           </div>
                         ))}
                         {g.members.length === 0 && <p className="text-xs text-gray-300 text-center py-2">فارغة</p>}
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 mb-1">
                         <select value={memberPick[g.id] ?? ''}
                           onChange={e => setMemberPick(p => ({ ...p, [g.id]: e.target.value }))}
                           className="flex-1 border rounded-lg px-1.5 py-1 text-xs bg-white min-w-0">
@@ -651,6 +707,12 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
                         <button onClick={() => addMember(g.id)} disabled={!memberPick[g.id]}
                           className="bg-blue-600 text-white text-xs px-2 rounded-lg disabled:opacity-40">+</button>
                       </div>
+                      <select value={pinPick[g.id] ?? ''}
+                        onChange={e => setPinPick(p => ({ ...p, [g.id]: e.target.value }))}
+                        className="w-full border rounded-lg px-1.5 py-1 text-[11px] bg-white text-gray-500">
+                        <option value="">عند الإضافة: يتناوب مع المجموعة (طبيعي)</option>
+                        {shifts.map(s => <option key={s.id} value={s.id}>📌 تثبيت الموظف الجديد على {s.name}</option>)}
+                      </select>
                     </div>
                   ))}
                 </div>
@@ -704,6 +766,18 @@ function RotationTab({ shifts, employees }: { shifts: Shift[]; employees: Employ
                         </tbody>
                       </table>
                     </div>
+                    {preview.groups.some(g => g.pinned.length > 0) && (
+                      <div className="px-4 py-3 border-t bg-amber-50/40">
+                        <p className="text-xs font-semibold text-amber-700 mb-1.5">📌 موظفون ثابتون (خارج التناوب)</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {preview.groups.flatMap(g => g.pinned).map(p => (
+                            <span key={p.employeeId} className="text-xs bg-white border border-amber-200 text-amber-800 rounded-lg px-2 py-1">
+                              {p.employeeName} — {p.shiftName}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

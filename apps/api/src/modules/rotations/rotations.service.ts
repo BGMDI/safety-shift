@@ -103,7 +103,10 @@ export class RotationsService {
           orderBy: { order: 'asc' },
           include: {
             members: {
-              include: { employee: { select: { id: true, fullName: true, employeeCode: true } } },
+              include: {
+                employee: { select: { id: true, fullName: true, employeeCode: true } },
+                pinnedShift: { select: { id: true, name: true, startTime: true, endTime: true } },
+              },
             },
           },
         },
@@ -124,7 +127,10 @@ export class RotationsService {
           orderBy: { order: 'asc' },
           include: {
             members: {
-              include: { employee: { select: { id: true, fullName: true, employeeCode: true } } },
+              include: {
+                employee: { select: { id: true, fullName: true, employeeCode: true } },
+                pinnedShift: { select: { id: true, name: true, startTime: true, endTime: true } },
+              },
             },
           },
         },
@@ -150,8 +156,17 @@ export class RotationsService {
       if (!s.days || s.days < 1) throw new BadRequestException('عدد أيام كل خطوة يجب أن يكون 1 على الأقل')
     }
     const restMode = dto.restMode === 'WEEKLY' ? 'WEEKLY' : dto.restMode === 'AFTER_N_DAYS' ? 'AFTER_N_DAYS' : 'AT_ROTATION'
-    if (restMode === 'AFTER_N_DAYS' && (!dto.workDaysBeforeRest || dto.workDaysBeforeRest < 1)) {
-      throw new BadRequestException('حدد عدد أيام العمل قبل الراحة (1 على الأقل)')
+    if (restMode === 'AFTER_N_DAYS') {
+      if (!dto.workDaysBeforeRest || dto.workDaysBeforeRest < 1) {
+        throw new BadRequestException('حدد عدد أيام العمل قبل الراحة (1 على الأقل)')
+      }
+      // لو كانت الفترة أقصر من مجموع أيام خطوات الشفتات، تُقتطع بعض الشفتات من الجدول ولا تظهر أبداً
+      const stepsSum = dto.steps.reduce((sum, s) => sum + Math.max(1, s.days), 0)
+      if (dto.workDaysBeforeRest < stepsSum) {
+        throw new BadRequestException(
+          `عدد أيام العمل قبل الراحة (${dto.workDaysBeforeRest}) أقل من مجموع أيام الشفتات في الدورة (${stepsSum}) — بعض الشفتات لن تظهر في الجدول. زد العدد إلى ${stepsSum} على الأقل أو قلّل أيام الشفتات`,
+        )
+      }
     }
 
     // تحقق أن الشفتات تابعة لنفس الشركة
@@ -213,7 +228,7 @@ export class RotationsService {
     return { message: 'تم حذف المجموعة' }
   }
 
-  async addMembers(tenantId: string, groupId: string, employeeIds: string[]) {
+  async addMembers(tenantId: string, groupId: string, employeeIds: string[], pinnedShiftId?: string | null) {
     const group = await prisma.rotationGroup.findFirst({ where: { id: groupId, plan: { tenantId } } })
     if (!group) throw new NotFoundException('المجموعة غير موجودة')
     if (!employeeIds?.length) return { added: 0 }
@@ -223,16 +238,44 @@ export class RotationsService {
       select: { id: true },
     })
 
+    let pinnedId: string | null = null
+    if (pinnedShiftId) {
+      const shift = await prisma.shift.findFirst({ where: { id: pinnedShiftId, tenantId } })
+      if (!shift) throw new BadRequestException('شفت التثبيت غير صالح')
+      pinnedId = shift.id
+    }
+
     // أزل الموظف من أي مجموعة أخرى في نفس الخطة (لا يكون في مجموعتين)
     await prisma.rotationGroupMember.deleteMany({
       where: { employeeId: { in: valid.map(v => v.id) }, group: { planId: group.planId } },
     })
 
     await prisma.rotationGroupMember.createMany({
-      data: valid.map(v => ({ groupId, employeeId: v.id })),
+      data: valid.map(v => ({ groupId, employeeId: v.id, pinnedShiftId: pinnedId })),
       skipDuplicates: true,
     })
     return { added: valid.length }
+  }
+
+  /* ── تثبيت/إلغاء تثبيت عضو موجود على شفت معيّن (بلا تناوب) ── */
+  async pinMember(tenantId: string, groupId: string, employeeId: string, shiftId: string | null) {
+    const member = await prisma.rotationGroupMember.findFirst({
+      where: { groupId, employeeId, group: { plan: { tenantId } } },
+    })
+    if (!member) throw new NotFoundException('العضو غير موجود في هذه المجموعة')
+
+    let pinnedId: string | null = null
+    if (shiftId) {
+      const shift = await prisma.shift.findFirst({ where: { id: shiftId, tenantId } })
+      if (!shift) throw new BadRequestException('شفت غير صالح')
+      pinnedId = shift.id
+    }
+
+    return prisma.rotationGroupMember.update({
+      where: { id: member.id },
+      data: { pinnedShiftId: pinnedId },
+      include: { pinnedShift: { select: { id: true, name: true } } },
+    })
   }
 
   async removeMember(tenantId: string, groupId: string, employeeId: string) {
@@ -271,12 +314,20 @@ export class RotationsService {
     const horizon = Math.min(Math.max(days, 1), 90)
     const windowStart = new Date(startDate ?? dateOnly(plan.startDate > new Date() ? plan.startDate : new Date()))
     const stepInputs = plan.steps.map(s => ({ shiftId: s.shiftId, days: s.days }))
+    // المصفوفة تمثّل فقط الأعضاء المتناوبين — الأعضاء المثبَّتين على شفت معيّن خارج دورة التناوب تماماً
     const matrix = this.buildMatrix({ ...plan, steps: stepInputs }, plan.groups.length, windowStart, horizon)
     return {
       planId: plan.id,
       startDate: dateOnly(windowStart),
       days: horizon,
-      groups: plan.groups.map(g => ({ id: g.id, name: g.name, memberCount: g.members.length })),
+      groups: plan.groups.map(g => ({
+        id: g.id,
+        name: g.name,
+        memberCount: g.members.filter(m => !m.pinnedShiftId).length,
+        pinned: g.members
+          .filter(m => m.pinnedShiftId)
+          .map(m => ({ employeeId: m.employeeId, employeeName: m.employee.fullName, shiftId: m.pinnedShiftId!, shiftName: m.pinnedShift?.name ?? '؟' })),
+      })),
       matrix,
     }
   }
@@ -309,14 +360,16 @@ export class RotationsService {
       data: { effectiveTo: dayBefore },
     })
 
-    // حوّل أعمدة المصفوفة إلى فترات متصلة لكل مجموعة
+    // حوّل أعمدة المصفوفة إلى فترات متصلة لكل مجموعة — للأعضاء المتناوبين فقط
     const rows: Array<{ tenantId: string; employeeId: string; shiftId: string; effectiveFrom: Date; effectiveTo: Date }> = []
     plan.groups.forEach((g, gi) => {
+      const rotatingMembers = g.members.filter(m => !m.pinnedShiftId)
+      if (!rotatingMembers.length) return
       let runShift: string | null = null
       let runStart = 0
       const flush = (endIdx: number) => {
         if (!runShift) return
-        for (const m of g.members) {
+        for (const m of rotatingMembers) {
           rows.push({
             tenantId,
             employeeId: m.employeeId,
@@ -336,6 +389,14 @@ export class RotationsService {
       })
       flush(matrix.length - 1)
     })
+
+    // الأعضاء المثبَّتون على شفت معيّن: تعيين واحد ثابت طوال فترة التطبيق، بلا تناوب ولا راحة
+    for (const g of plan.groups) {
+      for (const m of g.members) {
+        if (!m.pinnedShiftId) continue
+        rows.push({ tenantId, employeeId: m.employeeId, shiftId: m.pinnedShiftId, effectiveFrom: windowStart, effectiveTo: windowEnd })
+      }
+    }
 
     await prisma.employeeShift.createMany({ data: rows })
 

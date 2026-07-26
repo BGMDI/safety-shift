@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
@@ -48,9 +48,19 @@ export class RotationsController {
   addMembers(
     @CurrentUser() u: JwtPayload,
     @Param('groupId') groupId: string,
-    @Body() body: { employeeIds: string[] },
+    @Body() body: { employeeIds: string[]; pinnedShiftId?: string | null },
   ) {
-    return this.svc.addMembers(u.tenantId, groupId, body.employeeIds)
+    return this.svc.addMembers(u.tenantId, groupId, body.employeeIds, body.pinnedShiftId)
+  }
+
+  @Put('groups/:groupId/members/:employeeId/pin') @Roles('super_admin', 'hr_manager')
+  pinMember(
+    @CurrentUser() u: JwtPayload,
+    @Param('groupId') groupId: string,
+    @Param('employeeId') employeeId: string,
+    @Body() body: { shiftId: string | null },
+  ) {
+    return this.svc.pinMember(u.tenantId, groupId, employeeId, body.shiftId)
   }
 
   @Delete('groups/:groupId/members/:employeeId') @Roles('super_admin', 'hr_manager')

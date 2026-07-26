@@ -359,6 +359,7 @@ model Shift {
   branch          Branch          @relation(fields: [branchId], references: [id])
   employeeShifts  EmployeeShift[]
   rotationSteps   RotationStep[]
+  pinnedByMembers RotationGroupMember[]
 
   @@map("shifts")
 }
@@ -427,12 +428,14 @@ model RotationGroup {
 }
 
 model RotationGroupMember {
-  id         String @id @default(uuid())
-  groupId    String
-  employeeId String
+  id            String  @id @default(uuid())
+  groupId       String
+  employeeId    String
+  pinnedShiftId String? // إن كانت مضبوطة: الموظف ثابت على هذا الشفت دائماً ولا يدخل في دورة التناوب
 
-  group    RotationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  employee Employee      @relation(fields: [employeeId], references: [id])
+  group       RotationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  employee    Employee      @relation(fields: [employeeId], references: [id])
+  pinnedShift Shift?        @relation(fields: [pinnedShiftId], references: [id])
 
   @@unique([groupId, employeeId])
   @@map("rotation_group_members")
