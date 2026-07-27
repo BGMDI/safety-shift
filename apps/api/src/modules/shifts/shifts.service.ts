@@ -21,6 +21,10 @@ export class ShiftsService {
     isNightShift?: boolean
     workingDays: number[]
     minStaffing?: number
+    checkInWindowMinutes?: number
+    lateAfterMinutes?: number
+    absentAfterMinutes?: number
+    checkOutEarlyMinutes?: number
   }) {
     // تحقق أن الفرع تابع للشركة — وإلا استخدم أول فرع
     let branchId = data.branchId
@@ -32,7 +36,17 @@ export class ShiftsService {
       if (!first) throw new BadRequestException('أنشئ فرعاً أولاً من صفحة الهيكل التنظيمي')
       branchId = first.id
     }
-    return prisma.shift.create({ data: { ...data, branchId: branchId!, tenantId } })
+    return prisma.shift.create({
+      data: {
+        ...data,
+        branchId: branchId!,
+        tenantId,
+        checkInWindowMinutes: Math.max(0, data.checkInWindowMinutes ?? 30),
+        lateAfterMinutes: Math.max(0, data.lateAfterMinutes ?? 0),
+        absentAfterMinutes: Math.max(0, data.absentAfterMinutes ?? 60),
+        checkOutEarlyMinutes: Math.max(0, data.checkOutEarlyMinutes ?? 0),
+      },
+    })
   }
 
   async update(tenantId: string, id: string, data: {
@@ -44,6 +58,10 @@ export class ShiftsService {
     isNightShift?: boolean
     workingDays?: number[]
     minStaffing?: number | null
+    checkInWindowMinutes?: number
+    lateAfterMinutes?: number
+    absentAfterMinutes?: number
+    checkOutEarlyMinutes?: number
   }) {
     const existing = await prisma.shift.findFirst({ where: { id, tenantId } })
     if (!existing) throw new NotFoundException('الشفت غير موجود')
@@ -56,7 +74,14 @@ export class ShiftsService {
 
     return prisma.shift.update({
       where: { id },
-      data: { ...data, branchId },
+      data: {
+        ...data,
+        branchId,
+        checkInWindowMinutes: data.checkInWindowMinutes !== undefined ? Math.max(0, data.checkInWindowMinutes) : undefined,
+        lateAfterMinutes: data.lateAfterMinutes !== undefined ? Math.max(0, data.lateAfterMinutes) : undefined,
+        absentAfterMinutes: data.absentAfterMinutes !== undefined ? Math.max(0, data.absentAfterMinutes) : undefined,
+        checkOutEarlyMinutes: data.checkOutEarlyMinutes !== undefined ? Math.max(0, data.checkOutEarlyMinutes) : undefined,
+      },
       include: { branch: { select: { id: true, name: true } } },
     })
   }

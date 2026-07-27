@@ -13,6 +13,7 @@ interface RosterRow {
   branch: { name: string } | null
   department: { name: string } | null
   log: AttLog | null
+  likelyAbsent: boolean
 }
 interface Employee { id: string; fullName: string; employeeCode: string }
 interface Branch { id: string; name: string }
@@ -323,7 +324,9 @@ function RosterTab() {
                     ) : (
                       <>
                         <td className="px-3 py-3">
-                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-400">لم يُحضَّر</span>
+                          {r.likelyAbsent
+                            ? <span className="px-2 py-1 rounded-full text-xs bg-red-50 text-red-500" title="تجاوز وقت احتساب الغياب المحدد على شفته بلا تسجيل حضور">⚠️ غياب متوقع</span>
+                            : <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-400">لم يُحضَّر</span>}
                         </td>
                         <td className="px-3 py-3 text-gray-300">—</td>
                         <td className="px-3 py-3 text-gray-300">—</td>

@@ -3,7 +3,11 @@ import { Fragment, useState, useEffect, useMemo, useRef } from 'react'
 import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
 
-interface Shift { id: string; name: string; startTime: string; endTime: string; breakMinutes: number; minStaffing: number | null; isNightShift: boolean; workingDays: number[]; branch?: { id: string; name: string } | null }
+interface Shift {
+  id: string; name: string; startTime: string; endTime: string; breakMinutes: number; minStaffing: number | null
+  isNightShift: boolean; workingDays: number[]; branch?: { id: string; name: string } | null
+  checkInWindowMinutes: number; lateAfterMinutes: number; absentAfterMinutes: number; checkOutEarlyMinutes: number
+}
 interface Employee { id: string; fullName: string; employeeCode: string; branch?: { id: string; name: string } | null; jobTitle?: { id: string; name: string; isShiftEligible: boolean } | null }
 interface BranchOpt { id: string; name: string }
 interface ScheduleEntry { employeeId: string; employeeName: string; shiftName: string; date: string; startTime: string; endTime: string }
@@ -17,7 +21,10 @@ export default function ShiftsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [branches, setBranches] = useState<BranchOpt[]>([])
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([])
-  const [form, setForm] = useState({ name: '', branchId: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', minStaffing: '', isNightShift: false, workingDays: [0, 1, 2, 3, 4] })
+  const [form, setForm] = useState({
+    name: '', branchId: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', minStaffing: '', isNightShift: false, workingDays: [0, 1, 2, 3, 4],
+    checkInWindowMinutes: '30', lateAfterMinutes: '0', absentAfterMinutes: '60', checkOutEarlyMinutes: '0',
+  })
   const [assign, setAssign] = useState({ employeeId: '', shiftId: '', effectiveFrom: new Date().toISOString().split('T')[0] })
   const [schedDates, setSchedDates] = useState({ start: new Date().toISOString().split('T')[0], end: new Date(Date.now() + 6 * 86400000).toISOString().split('T')[0] })
   const [loading, setLoading] = useState(false)
@@ -48,6 +55,7 @@ export default function ShiftsPage() {
 
   const resetShiftForm = () => setForm(f => ({
     ...f, name: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', minStaffing: '', isNightShift: false, workingDays: [0, 1, 2, 3, 4],
+    checkInWindowMinutes: '30', lateAfterMinutes: '0', absentAfterMinutes: '60', checkOutEarlyMinutes: '0',
   }))
 
   const startEditShift = (s: Shift) => {
@@ -56,6 +64,8 @@ export default function ShiftsPage() {
       name: s.name, branchId: s.branch?.id ?? '', startTime: s.startTime, endTime: s.endTime,
       breakMinutes: String(s.breakMinutes), minStaffing: s.minStaffing ? String(s.minStaffing) : '',
       isNightShift: s.isNightShift, workingDays: s.workingDays,
+      checkInWindowMinutes: String(s.checkInWindowMinutes), lateAfterMinutes: String(s.lateAfterMinutes),
+      absentAfterMinutes: String(s.absentAfterMinutes), checkOutEarlyMinutes: String(s.checkOutEarlyMinutes),
     })
     // النموذج أعلى الصفحة وزر "تعديل" أسفلها في الجدول — بدون هذا التمرير يبدو وكأن الزر لا يفعل شيئاً
     shiftFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -73,6 +83,10 @@ export default function ShiftsPage() {
         breakMinutes: Number(form.breakMinutes),
         // عند التعديل: تفريغ الحقل يجب أن يمسح القيمة (null) لا أن يتجاهلها (undefined يعني "لا تغيّر" في Prisma)
         minStaffing: form.minStaffing ? Number(form.minStaffing) : (editingShiftId ? null : undefined),
+        checkInWindowMinutes: Number(form.checkInWindowMinutes) || 0,
+        lateAfterMinutes: Number(form.lateAfterMinutes) || 0,
+        absentAfterMinutes: Number(form.absentAfterMinutes) || 0,
+        checkOutEarlyMinutes: Number(form.checkOutEarlyMinutes) || 0,
       }
       if (editingShiftId) {
         await api.put(`/shifts/${editingShiftId}`, payload)
@@ -175,6 +189,35 @@ export default function ShiftsPage() {
             <div className="flex items-center gap-2 mb-4">
               <input type="checkbox" id="night" checked={form.isNightShift} onChange={e => setForm({ ...form, isNightShift: e.target.checked })} />
               <label htmlFor="night" className="text-sm">شفت ليلي</label>
+            </div>
+
+            <div className="mb-4 border-t pt-4">
+              <p className="text-xs font-semibold text-gray-500 mb-3">⏱️ قواعد الحضور والانصراف لهذا الشفت</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">تسجيل الحضور مفتوح قبل بداية الشفت بـ (دقيقة)</label>
+                  <input type="number" min="0" value={form.checkInWindowMinutes}
+                    onChange={e => setForm({ ...form, checkInWindowMinutes: e.target.value })} className={inp} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">السماح بالتأخير (دقيقة) قبل احتسابه "تأخيراً"</label>
+                  <input type="number" min="0" value={form.lateAfterMinutes}
+                    onChange={e => setForm({ ...form, lateAfterMinutes: e.target.value })} className={inp} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">احتساب "غياب" بعد (دقيقة) من بداية الشفت بلا حضور</label>
+                  <input type="number" min="0" value={form.absentAfterMinutes}
+                    onChange={e => setForm({ ...form, absentAfterMinutes: e.target.value })} className={inp} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">تسجيل الانصراف مسموح قبل نهاية الشفت بـ (دقيقة)</label>
+                  <input type="number" min="0" value={form.checkOutEarlyMinutes}
+                    onChange={e => setForm({ ...form, checkOutEarlyMinutes: e.target.value })} className={inp} />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                مثال: نافذة حضور 30 د تعني يمكن التسجيل من الساعة 07:30 لشفت يبدأ 08:00 · صفر في "الانصراف قبل النهاية" يعني الانتظار لنهاية الشفت بالضبط
+              </p>
             </div>
             <div className="flex gap-2">
               <button onClick={createShift} disabled={loading || !form.name.trim()}

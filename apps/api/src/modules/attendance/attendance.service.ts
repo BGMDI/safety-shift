@@ -5,7 +5,21 @@ import { prisma } from '@shift-saas/database'
 const localDateStr = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-interface ShiftTimes { startTime: string; endTime: string; breakMinutes: number }
+interface ShiftTimes {
+  startTime: string; endTime: string; breakMinutes: number
+  checkInWindowMinutes?: number; lateAfterMinutes?: number
+  absentAfterMinutes?: number; checkOutEarlyMinutes?: number
+}
+
+const DAY_MS = 86400000
+
+/* بداية/نهاية الوردية كتاريخ فعلي في يوم معيّن — تمتد النهاية لليوم التالي إن كانت الوردية ليلية تعبر منتصف الليل */
+function shiftBounds(dateStr: string, shift: ShiftTimes) {
+  const start = new Date(`${dateStr}T${shift.startTime}`)
+  let end = new Date(`${dateStr}T${shift.endTime}`)
+  if (end <= start) end = new Date(end.getTime() + DAY_MS)
+  return { start, end }
+}
 
 @Injectable()
 export class AttendanceService {
@@ -32,9 +46,7 @@ export class AttendanceService {
     let lateMinutes = 0
     let overtimeMinutes = 0
     if (shift) {
-      const start = new Date(`${dateStr}T${shift.startTime}`)
-      let end = new Date(`${dateStr}T${shift.endTime}`)
-      if (end <= start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000) // شفت ليلي يعبر منتصف الليل
+      const { start, end } = shiftBounds(dateStr, shift)
       if (checkIn) lateMinutes = Math.max(0, Math.floor((checkIn.getTime() - start.getTime()) / 60000))
       if (checkOut) overtimeMinutes = Math.max(0, Math.floor((checkOut.getTime() - end.getTime()) / 60000))
     } else if (checkIn && checkOut) {
@@ -44,10 +56,19 @@ export class AttendanceService {
     return { lateMinutes, overtimeMinutes }
   }
 
-  /* ── كشف التحضير: كل الموظفين النشطين مع سجل اليوم (أو بدونه) ── */
+  /* ── هل يتجاوز التأخير فترة السماح المحددة على الوردية؟ ── */
+  private isLate(lateMinutes: number, shift: ShiftTimes | null) {
+    return lateMinutes > (shift?.lateAfterMinutes ?? 0)
+  }
+
+  /* ── كشف التحضير: كل الموظفين النشطين مع سجل اليوم (أو بدونه) ──
+     لمن لم يُسجَّل له شيء: نحسب "غياب متوقع" حسب عتبة الغياب المحددة على شفته —
+     تلقائياً لليوم الحالي بعد تجاوز العتبة، أو فوراً لأي تاريخ ماضٍ انتهى بالكامل بلا تسجيل */
   async getRoster(tenantId: string, dateStr?: string, filters?: { branchId?: string; departmentId?: string }) {
     const ds = dateStr || localDateStr()
     const date = new Date(ds)
+    const isPast = ds < localDateStr()
+    const now = new Date()
     const [employees, logs] = await Promise.all([
       prisma.employee.findMany({
         where: {
@@ -66,7 +87,36 @@ export class AttendanceService {
       prisma.attendanceLog.findMany({ where: { tenantId, date } }),
     ])
     const logMap = new Map(logs.map(l => [l.employeeId, l]))
-    return employees.map(e => ({ ...e, log: logMap.get(e.id) ?? null }))
+
+    const employeeIds = employees.map(e => e.id)
+    const assignments = employeeIds.length
+      ? await prisma.employeeShift.findMany({
+          where: {
+            tenantId,
+            employeeId: { in: employeeIds },
+            effectiveFrom: { lte: date },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gte: date } }],
+          },
+          include: { shift: { select: { startTime: true, absentAfterMinutes: true } } },
+          orderBy: { effectiveFrom: 'desc' },
+        })
+      : []
+    const shiftMap = new Map<string, { startTime: string; absentAfterMinutes: number }>()
+    for (const a of assignments) if (!shiftMap.has(a.employeeId)) shiftMap.set(a.employeeId, a.shift)
+
+    return employees.map(e => {
+      const log = logMap.get(e.id) ?? null
+      let likelyAbsent = false
+      if (!log) {
+        const shift = shiftMap.get(e.id)
+        if (isPast) likelyAbsent = true
+        else if (shift) {
+          const threshold = new Date(new Date(`${ds}T${shift.startTime}`).getTime() + shift.absentAfterMinutes * 60000)
+          likelyAbsent = now > threshold
+        }
+      }
+      return { ...e, log, likelyAbsent }
+    })
   }
 
   /* ── تحضير جماعي: تسجيل حالة لكل من لم يُسجَّل له بعد ── */
@@ -149,7 +199,7 @@ export class AttendanceService {
     const m = this.computeMinutes(data.date, effIn, effOut, shift)
     payload.lateMinutes = m.lateMinutes
     payload.overtimeMinutes = m.overtimeMinutes
-    if (m.lateMinutes > 0 && payload.status === 'PRESENT') payload.status = 'LATE'
+    if (this.isLate(m.lateMinutes, shift) && payload.status === 'PRESENT') payload.status = 'LATE'
 
     if (existing) {
       return prisma.attendanceLog.update({ where: { id: existing.id }, data: payload })
@@ -181,7 +231,7 @@ export class AttendanceService {
     const m = this.computeMinutes(dateStr, effIn, effOut, shift)
     upd.lateMinutes = m.lateMinutes
     upd.overtimeMinutes = m.overtimeMinutes
-    if (m.lateMinutes > 0 && (upd.status ?? existing.status) === 'PRESENT') upd.status = 'LATE'
+    if (this.isLate(m.lateMinutes, shift) && (upd.status ?? existing.status) === 'PRESENT') upd.status = 'LATE'
 
     const updated = await prisma.attendanceLog.update({ where: { id }, data: upd })
 
@@ -224,22 +274,30 @@ export class AttendanceService {
     return { logs, summary }
   }
 
-  /* ── تحضير ذاتي: حضور أو انصراف الآن ── */
+  /* ── تحضير ذاتي: حضور أو انصراف الآن — يُقيَّد بنافذتي التسجيل المحددتين على الوردية ── */
   async selfCheck(tenantId: string, employeeId: string, type: 'in' | 'out') {
     const dateStr = localDateStr()
     const date = new Date(dateStr)
     const now = new Date()
     const existing = await prisma.attendanceLog.findFirst({ where: { tenantId, employeeId, date } })
     const shift = await this.getActiveShift(tenantId, employeeId, date)
+    const fmtHM = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
     if (type === 'in') {
       if (existing?.checkIn) throw new BadRequestException('سجلت حضورك مسبقاً اليوم')
+      if (shift) {
+        const { start } = shiftBounds(dateStr, shift)
+        const earliestAllowed = new Date(start.getTime() - (shift.checkInWindowMinutes ?? 30) * 60000)
+        if (now < earliestAllowed) {
+          throw new BadRequestException(`لم يحن وقت تسجيل الحضور بعد — يُسمح بالتسجيل من الساعة ${fmtHM(earliestAllowed)}`)
+        }
+      }
       const m = this.computeMinutes(dateStr, now, existing?.checkOut ?? null, shift)
       const payload = {
         checkIn: now,
         lateMinutes: m.lateMinutes,
         overtimeMinutes: m.overtimeMinutes,
-        status: (m.lateMinutes > 0 ? 'LATE' : 'PRESENT') as any,
+        status: (this.isLate(m.lateMinutes, shift) ? 'LATE' : 'PRESENT') as any,
         source: 'SELF' as any,
       }
       if (existing) return prisma.attendanceLog.update({ where: { id: existing.id }, data: payload })
@@ -249,6 +307,13 @@ export class AttendanceService {
     // انصراف
     if (!existing?.checkIn) throw new BadRequestException('سجل حضورك أولاً قبل الانصراف')
     if (existing.checkOut) throw new BadRequestException('سجلت انصرافك مسبقاً اليوم')
+    if (shift) {
+      const { end } = shiftBounds(dateStr, shift)
+      const earliestAllowed = new Date(end.getTime() - (shift.checkOutEarlyMinutes ?? 0) * 60000)
+      if (now < earliestAllowed) {
+        throw new BadRequestException(`لم يحن وقت تسجيل الانصراف بعد — يُسمح بالتسجيل من الساعة ${fmtHM(earliestAllowed)}`)
+      }
+    }
     const m = this.computeMinutes(dateStr, existing.checkIn, now, shift)
     return prisma.attendanceLog.update({
       where: { id: existing.id },

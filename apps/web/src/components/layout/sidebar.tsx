@@ -132,7 +132,7 @@ export function Sidebar() {
           onMouseEnter={e => { e.currentTarget.style.color = '#DE6577'; e.currentTarget.style.background = 'rgba(255,255,255,.06)' }}
           onMouseLeave={e => { e.currentTarget.style.color = 'rgba(231,238,235,.55)'; e.currentTarget.style.background = 'transparent' }}
         >
-          🚪 تسجيل الخروج
+          🔒 تسجيل الخروج
         </button>
         <ThemeToggle
           className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition"

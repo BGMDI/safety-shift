@@ -363,6 +363,12 @@ model Shift {
   workingDays  Int[]
   minStaffing  Int?     // الحد الأدنى المطلوب من الموظفين لهذه الوردية — لحساب فجوة التغطية
 
+  // قواعد الحضور والانصراف الخاصة بهذه الوردية
+  checkInWindowMinutes  Int @default(30) // يُسمح بتسجيل الحضور قبل بداية الوردية بهذا العدد من الدقائق كحد أقصى
+  lateAfterMinutes      Int @default(0)  // فترة سماح بالدقائق بعد بداية الوردية قبل اعتبار الحضور "متأخراً"
+  absentAfterMinutes    Int @default(60) // إن لم يُسجَّل حضور بعد هذا العدد من الدقائق من بداية الوردية يُعتبر "غائباً"
+  checkOutEarlyMinutes  Int @default(0)  // أقصى عدد دقائق يمكن تسجيل الانصراف فيها قبل نهاية الوردية (0 = يجب الانتظار للنهاية بالضبط)
+
   tenant          Tenant          @relation(fields: [tenantId], references: [id])
   branch          Branch          @relation(fields: [branchId], references: [id])
   employeeShifts  EmployeeShift[]
