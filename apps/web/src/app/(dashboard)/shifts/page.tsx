@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useState, useEffect, useMemo } from 'react'
+import { Fragment, useState, useEffect, useMemo, useRef } from 'react'
 import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
 
@@ -42,6 +42,9 @@ export default function ShiftsPage() {
   }
 
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+  const shiftFormRef = useRef<HTMLDivElement>(null)
+  const [shiftListBranchFilter, setShiftListBranchFilter] = useState('')
+  const filteredShifts = shiftListBranchFilter ? shifts.filter(s => s.branch?.id === shiftListBranchFilter) : shifts
 
   const resetShiftForm = () => setForm(f => ({
     ...f, name: '', startTime: '08:00', endTime: '17:00', breakMinutes: '60', minStaffing: '', isNightShift: false, workingDays: [0, 1, 2, 3, 4],
@@ -54,6 +57,8 @@ export default function ShiftsPage() {
       breakMinutes: String(s.breakMinutes), minStaffing: s.minStaffing ? String(s.minStaffing) : '',
       isNightShift: s.isNightShift, workingDays: s.workingDays,
     })
+    // النموذج أعلى الصفحة وزر "تعديل" أسفلها في الجدول — بدون هذا التمرير يبدو وكأن الزر لا يفعل شيئاً
+    shiftFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const cancelEditShift = () => { setEditingShiftId(null); resetShiftForm() }
@@ -137,7 +142,7 @@ export default function ShiftsPage() {
 
       {tab === 'shifts' && (
         <>
-          <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+          <div ref={shiftFormRef} className={`bg-white rounded-xl shadow-sm p-5 mb-6 ${editingShiftId ? 'ring-2 ring-blue-400' : ''}`}>
             <h2 className="font-semibold mb-4">{editingShiftId ? '✏️ تعديل الشفت' : 'إنشاء شفت جديد'}</h2>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div><label className="text-xs text-gray-500 mb-1 block">اسم الشفت *</label>
@@ -184,6 +189,20 @@ export default function ShiftsPage() {
             </div>
           </div>
 
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-400">
+              {filteredShifts.length} شفت{shiftListBranchFilter ? '' : ` (${shifts.length} إجمالاً)`}
+            </p>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-500">الفرع:</label>
+              <select value={shiftListBranchFilter} onChange={e => setShiftListBranchFilter(e.target.value)}
+                className="border rounded-lg px-2 py-1.5 text-xs bg-white">
+                <option value="">كل الفروع</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+          </div>
+
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
@@ -191,9 +210,9 @@ export default function ShiftsPage() {
                   <th key={h} className="text-right px-4 py-3 font-medium text-gray-600">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y">
-                {shifts.length === 0
-                  ? <tr><td colSpan={9} className="text-center py-10 text-gray-400">لا توجد شفتات</td></tr>
-                  : shifts.map(s => (
+                {filteredShifts.length === 0
+                  ? <tr><td colSpan={9} className="text-center py-10 text-gray-400">{shiftListBranchFilter ? 'لا توجد شفتات لهذا الفرع' : 'لا توجد شفتات'}</td></tr>
+                  : filteredShifts.map(s => (
                     <tr key={s.id} className={`hover:bg-gray-50 ${editingShiftId === s.id ? 'bg-blue-50/50' : ''}`}>
                       <td className="px-4 py-3 font-medium">{s.name}</td>
                       <td className="px-4 py-3">
