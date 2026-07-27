@@ -237,7 +237,8 @@ model Employee {
   supervisedSites   Branch[]        @relation("SiteSupervisor")
   supervisedRotationGroups RotationGroup[] @relation("PeriodSupervisor")
   onboardingRequests OnboardingRequest[]
-  approvalCases     ApprovalCase[]
+  approvalCases         ApprovalCase[]   @relation("ApprovalRequester")
+  decidedApprovalCases  ApprovalCase[]   @relation("ApprovalCaseDecider")
   approvalActions   ApprovalAction[]
 
   @@unique([tenantId, employeeCode])
@@ -722,6 +723,12 @@ enum ApprovalCaseStatus {
   REJECTED
 }
 
+// تصعيد تلقائي عند استنفاد كل خطوات المسار المُهيّأ بلا موافق مؤهل
+enum ApprovalFallbackTier {
+  HR          // شؤون الموظفين (دور hr_manager) — لا يوجد رئيس قسم أو مدير فرع
+  SUPER_ADMIN // مدير النظام (دور super_admin) — لا يوجد حتى شؤون الموظفين
+}
+
 enum ApprovalActionStatus {
   PENDING   // لم يصلها الدور بعد / بانتظار البتّ
   SKIPPED   // تخطّاها النظام (لا يوجد موافق مؤهّل لهذه الخطوة)
@@ -771,12 +778,18 @@ model ApprovalCase {
   employeeId   String              // مقدّم الطلب
   status       ApprovalCaseStatus  @default(PENDING)
   currentOrder Int                 @default(1)
+  // تصعيد استثنائي عند استنفاد كل خطوات المسار المُهيّأ بلا موافق مؤهل — لا اعتماد تلقائي أبداً:
+  // HR = شؤون الموظفين (لا يوجد رئيس قسم/مدير فرع) | SUPER_ADMIN = مدير النظام (لا يوجد حتى شؤون الموظفين)
+  fallbackTier ApprovalFallbackTier?
+  decidedById  String?             // من بتّ نهائياً — مطلوب خصوصاً في حالة التصعيد (لا يوجد ApprovalAction مرتبط)
+  notes        String?
   createdAt    DateTime            @default(now())
   decidedAt    DateTime?
 
   tenant   Tenant           @relation(fields: [tenantId], references: [id])
   workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id])
-  employee Employee         @relation(fields: [employeeId], references: [id])
+  employee Employee         @relation("ApprovalRequester", fields: [employeeId], references: [id])
+  decidedBy Employee?       @relation("ApprovalCaseDecider", fields: [decidedById], references: [id])
   actions  ApprovalAction[]
 
   @@unique([requestType, requestId])

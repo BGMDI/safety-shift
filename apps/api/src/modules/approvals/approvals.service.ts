@@ -130,6 +130,17 @@ export class ApprovalsService {
     return []
   }
 
+  /** كل الموظفين النشطين الحاملين لدور معيّن بالاسم (لاستخدامها في تصعيد التخطي الاحتياطي) */
+  private async resolveRoleHolders(tenantId: string, roleName: string): Promise<string[]> {
+    const role = await prisma.role.findFirst({ where: { tenantId, name: roleName } })
+    if (!role) return []
+    const assignments = await prisma.employeeRole.findMany({
+      where: { roleId: role.id, employee: { tenantId, status: 'ACTIVE' } },
+      select: { employeeId: true },
+    })
+    return assignments.map(a => a.employeeId)
+  }
+
   /* ══════════ إنشاء حالة اعتماد جديدة عند تقديم طلب ══════════ */
 
   /** يُستدعى فور إنشاء الطلب الأصلي (إجازة/بدلة/مباشرة). يُرجع null إن لم يوجد مسار مُهيّأ (اعتماد مباشر قديم). */
@@ -176,9 +187,8 @@ export class ApprovalsService {
       const nextOrder = current.order + 1
       const next = kase.actions.find(a => a.order === nextOrder)
       if (!next) {
-        // انتهت كل الخطوات بلا موافق مؤهّل — اعتماد تلقائي (لا يوجد من يمنعه)
-        await prisma.approvalCase.update({ where: { id: caseId }, data: { status: 'APPROVED', decidedAt: new Date() } })
-        return { caseStatus: 'APPROVED', currentStepLabel: null, currentStepOrder: null, eligibleApproverIds: [] }
+        // انتهت كل خطوات المسار المُهيّأ بلا موافق مؤهّل — تصعيد احتياطي، لا اعتماد تلقائي أبداً
+        return this.escalateFallback(caseId, kase.tenantId)
       }
       await prisma.approvalCase.update({ where: { id: caseId }, data: { currentOrder: nextOrder } })
       current = next
@@ -186,6 +196,23 @@ export class ApprovalsService {
 
     // احتياط: لو وصلنا هنا فالحالة محسومة أصلاً
     return { caseStatus: kase.status as any, currentStepLabel: null, currentStepOrder: null, eligibleApproverIds: [] }
+  }
+
+  /* ══════════ تصعيد احتياطي: شؤون الموظفين ثم مدير النظام — لا اعتماد تلقائي أبداً ══════════ */
+
+  private async escalateFallback(caseId: string, tenantId: string): Promise<ApprovalCaseSummary> {
+    const hr = await this.resolveRoleHolders(tenantId, 'hr_manager')
+    if (hr.length > 0) {
+      await prisma.approvalCase.update({ where: { id: caseId }, data: { fallbackTier: 'HR' } })
+      return { caseStatus: 'PENDING', currentStepLabel: 'شؤون الموظفين (لا يوجد رئيس قسم أو مدير فرع)', currentStepOrder: null, eligibleApproverIds: hr }
+    }
+    const admins = await this.resolveRoleHolders(tenantId, 'super_admin')
+    if (admins.length > 0) {
+      await prisma.approvalCase.update({ where: { id: caseId }, data: { fallbackTier: 'SUPER_ADMIN' } })
+      return { caseStatus: 'PENDING', currentStepLabel: 'مدير النظام (لا يوجد معتمد آخر متاح)', currentStepOrder: null, eligibleApproverIds: admins }
+    }
+    // حالة استثنائية: لا يوجد حتى مدير نظام نشط — يبقى الطلب معلّقاً بلا معتمد بدل اعتماده تلقائياً
+    return { caseStatus: 'PENDING', currentStepLabel: 'لا يوجد معتمد متاح حالياً', currentStepOrder: null, eligibleApproverIds: [] }
   }
 
   /* ══════════ البتّ في الخطوة الحالية ══════════ */
@@ -197,6 +224,17 @@ export class ApprovalsService {
     })
     if (!kase) throw new NotFoundException('لا يوجد مسار اعتماد لهذا الطلب')
     if (kase.status !== 'PENDING') throw new BadRequestException('تم البتّ في هذا الطلب مسبقاً')
+
+    // حالة التصعيد الاحتياطي (شؤون الموظفين / مدير النظام) — لا خطوة/إجراء مرتبط، فقط تحقق من الدور
+    if (kase.fallbackTier) {
+      const eligible = await this.resolveRoleHolders(tenantId, kase.fallbackTier === 'HR' ? 'hr_manager' : 'super_admin')
+      if (!eligible.includes(actorId)) throw new ForbiddenException('لست الموافق المخوَّل لهذا الطلب')
+      await prisma.approvalCase.update({
+        where: { id: kase.id },
+        data: { status: decision, decidedAt: new Date(), decidedById: actorId, notes },
+      })
+      return { caseStatus: decision, currentStepLabel: null }
+    }
 
     const current = kase.actions.find(a => a.order === kase.currentOrder)
     if (!current || current.status !== 'PENDING') throw new BadRequestException('لا توجد خطوة نشطة بانتظار البتّ')
@@ -210,14 +248,14 @@ export class ApprovalsService {
     })
 
     if (decision === 'REJECTED') {
-      await prisma.approvalCase.update({ where: { id: kase.id }, data: { status: 'REJECTED', decidedAt: new Date() } })
+      await prisma.approvalCase.update({ where: { id: kase.id }, data: { status: 'REJECTED', decidedAt: new Date(), decidedById: actorId } })
       return { caseStatus: 'REJECTED', currentStepLabel: null }
     }
 
     const nextOrder = kase.currentOrder + 1
     const hasNext = kase.actions.some(a => a.order === nextOrder)
     if (!hasNext) {
-      await prisma.approvalCase.update({ where: { id: kase.id }, data: { status: 'APPROVED', decidedAt: new Date() } })
+      await prisma.approvalCase.update({ where: { id: kase.id }, data: { status: 'APPROVED', decidedAt: new Date(), decidedById: actorId } })
       return { caseStatus: 'APPROVED', currentStepLabel: null }
     }
 
@@ -237,21 +275,47 @@ export class ApprovalsService {
           orderBy: { order: 'asc' },
           include: { step: true, decider: { select: { fullName: true, employeeCode: true } } },
         },
+        decidedBy: { select: { fullName: true, employeeCode: true } },
       },
     })
     if (!kase) return null
-    return {
-      status: kase.status,
-      currentOrder: kase.currentOrder,
-      steps: kase.actions.map(a => ({
-        order: a.order, label: a.step.label, status: a.status,
-        decider: a.decider ? { fullName: a.decider.fullName, employeeCode: a.decider.employeeCode } : null,
-        decidedAt: a.decidedAt, notes: a.notes,
-      })),
+    const steps = kase.actions.map(a => ({
+      order: a.order, label: a.step.label, status: a.status as string,
+      decider: a.decider ? { fullName: a.decider.fullName, employeeCode: a.decider.employeeCode } : null,
+      decidedAt: a.decidedAt, notes: a.notes,
+    }))
+    if (kase.fallbackTier) {
+      steps.push({
+        order: steps.length + 1,
+        label: kase.fallbackTier === 'HR'
+          ? 'شؤون الموظفين (تصعيد تلقائي — لا يوجد رئيس قسم أو مدير فرع)'
+          : 'مدير النظام (تصعيد تلقائي — لا يوجد معتمد آخر متاح)',
+        status: kase.status === 'PENDING' ? 'PENDING' : kase.status,
+        decider: kase.decidedBy ? { fullName: kase.decidedBy.fullName, employeeCode: kase.decidedBy.employeeCode } : null,
+        decidedAt: kase.decidedAt, notes: kase.notes,
+      })
     }
+    return { status: kase.status, currentOrder: kase.currentOrder, steps }
   }
 
-  /** طلبات بانتظار موافقة موظف معيّن — أي دوره كان (دور نظام أو رئيس قسم/مدير فرع مُعيَّن هيكلياً) */
+  /** ملخص عرض الطلب الأصلي (إجازة/بدلة/مباشرة) لعنصر في قائمة الموافقات */
+  private async getRequestSummary(kase: { requestType: RequestType; requestId: string }): Promise<{ title: string; detail: string } | null> {
+    if (kase.requestType === 'LEAVE') {
+      const r = await prisma.leaveRequest.findUnique({ where: { id: kase.requestId }, include: { leaveType: { select: { name: true } } } })
+      return r ? { title: r.leaveType.name, detail: `${r.startDate.toISOString().slice(0, 10)} ← ${r.endDate.toISOString().slice(0, 10)}` } : null
+    }
+    if (kase.requestType === 'UNIFORM') {
+      const r = await prisma.uniformRequest.findUnique({ where: { id: kase.requestId } })
+      return r ? { title: r.uniformType, detail: `${r.size ?? ''} · ×${r.quantity}` } : null
+    }
+    if (kase.requestType === 'ONBOARDING') {
+      const r = await prisma.onboardingRequest.findUnique({ where: { id: kase.requestId } })
+      return r ? { title: r.type === 'NEW_HIRE' ? 'مباشرة تعيين' : 'مباشرة عودة من إجازة', detail: r.scheduledDate.toISOString().slice(0, 10) } : null
+    }
+    return null
+  }
+
+  /** طلبات بانتظار موافقة موظف معيّن — أي دوره كان (دور نظام، رئيس قسم/مدير فرع مُعيَّن هيكلياً، أو تصعيد احتياطي) */
   async getMyQueue(tenantId: string, employeeId: string) {
     const pendingCases = await prisma.approvalCase.findMany({
       where: { tenantId, status: 'PENDING' },
@@ -264,27 +328,29 @@ export class ApprovalsService {
 
     const mine = []
     for (const kase of pendingCases) {
-      const current = kase.actions.find(a => a.order === kase.currentOrder)
-      if (!current || current.status !== 'PENDING') continue
-      const eligible = await this.resolveEligibleApprovers(tenantId, current.step, kase.employee)
-      if (!eligible.includes(employeeId)) continue
+      let stepLabel: string
+      let stepOrder: number
 
-      let requestSummary: any = null
-      if (kase.requestType === 'LEAVE') {
-        const r = await prisma.leaveRequest.findUnique({ where: { id: kase.requestId }, include: { leaveType: { select: { name: true } } } })
-        requestSummary = r ? { title: r.leaveType.name, detail: `${r.startDate.toISOString().slice(0, 10)} ← ${r.endDate.toISOString().slice(0, 10)}` } : null
-      } else if (kase.requestType === 'UNIFORM') {
-        const r = await prisma.uniformRequest.findUnique({ where: { id: kase.requestId } })
-        requestSummary = r ? { title: r.uniformType, detail: `${r.size ?? ''} · ×${r.quantity}` } : null
-      } else if (kase.requestType === 'ONBOARDING') {
-        const r = await prisma.onboardingRequest.findUnique({ where: { id: kase.requestId } })
-        requestSummary = r ? { title: r.type === 'NEW_HIRE' ? 'مباشرة تعيين' : 'مباشرة عودة من إجازة', detail: r.scheduledDate.toISOString().slice(0, 10) } : null
+      if (kase.fallbackTier) {
+        const eligible = await this.resolveRoleHolders(tenantId, kase.fallbackTier === 'HR' ? 'hr_manager' : 'super_admin')
+        if (!eligible.includes(employeeId)) continue
+        stepLabel = kase.fallbackTier === 'HR' ? 'شؤون الموظفين (تصعيد احتياطي)' : 'مدير النظام (تصعيد احتياطي)'
+        stepOrder = kase.actions.length + 1
+      } else {
+        const current = kase.actions.find(a => a.order === kase.currentOrder)
+        if (!current || current.status !== 'PENDING') continue
+        const eligible = await this.resolveEligibleApprovers(tenantId, current.step, kase.employee)
+        if (!eligible.includes(employeeId)) continue
+        stepLabel = current.step.label
+        stepOrder = current.order
       }
+
+      const requestSummary = await this.getRequestSummary(kase)
       if (!requestSummary) continue
 
       mine.push({
         caseId: kase.id, requestType: kase.requestType, requestId: kase.requestId,
-        stepLabel: current.step.label, stepOrder: current.order, totalSteps: kase.actions.length,
+        stepLabel, stepOrder, totalSteps: kase.fallbackTier ? kase.actions.length + 1 : kase.actions.length,
         employee: { id: kase.employee.id, fullName: kase.employee.fullName, employeeCode: kase.employee.employeeCode },
         title: requestSummary.title, detail: requestSummary.detail, createdAt: kase.createdAt,
       })
