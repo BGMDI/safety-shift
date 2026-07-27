@@ -120,6 +120,7 @@ export class RotationsService {
         groups: {
           orderBy: { order: 'asc' },
           include: {
+            supervisor: { select: { id: true, fullName: true, employeeCode: true } },
             members: {
               include: {
                 employee: { select: { id: true, fullName: true, employeeCode: true } },
@@ -144,6 +145,7 @@ export class RotationsService {
         groups: {
           orderBy: { order: 'asc' },
           include: {
+            supervisor: { select: { id: true, fullName: true, employeeCode: true } },
             members: {
               include: {
                 employee: { select: { id: true, fullName: true, employeeCode: true } },
@@ -225,6 +227,25 @@ export class RotationsService {
         name: name?.trim() || GROUP_NAMES[plan.groups.length] || `مجموعة ${plan.groups.length + 1}`,
         order: plan.groups.length,
       },
+    })
+  }
+
+  /* ── تعيين/إلغاء مشرف الفترة لهذه المجموعة ── */
+  async setGroupSupervisor(tenantId: string, groupId: string, employeeId: string | null) {
+    const group = await prisma.rotationGroup.findFirst({ where: { id: groupId, plan: { tenantId } } })
+    if (!group) throw new NotFoundException('المجموعة غير موجودة')
+
+    let supervisorId: string | null = null
+    if (employeeId) {
+      const employee = await prisma.employee.findFirst({ where: { id: employeeId, tenantId } })
+      if (!employee) throw new BadRequestException('موظف غير صالح')
+      supervisorId = employee.id
+    }
+
+    return prisma.rotationGroup.update({
+      where: { id: groupId },
+      data: { supervisorEmployeeId: supervisorId },
+      include: { supervisor: { select: { id: true, fullName: true } } },
     })
   }
 

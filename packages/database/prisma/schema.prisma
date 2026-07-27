@@ -130,19 +130,21 @@ model Subscription {
 // =============================
 
 model Branch {
-  id                String   @id @default(uuid())
-  tenantId          String
-  name              String
-  location          String?
-  timezone          String   @default("Asia/Riyadh")
-  managerEmployeeId String?  // مدير الفرع — يُستخدم في مسار اعتماد الطلبات
-  createdAt         DateTime @default(now())
+  id                        String   @id @default(uuid())
+  tenantId                  String
+  name                      String
+  location                  String?
+  timezone                  String   @default("Asia/Riyadh")
+  managerEmployeeId         String?  // مدير الفرع — يُستخدم في مسار اعتماد الطلبات
+  siteSupervisorEmployeeId  String?  // مشرف الموقع — مسؤول الإشراف الميداني على هذا الموقع/الفرع
+  createdAt                 DateTime @default(now())
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  manager     Employee?    @relation("BranchManager", fields: [managerEmployeeId], references: [id])
-  employees   Employee[]
-  shifts      Shift[]
-  departments Department[]
+  tenant         Tenant       @relation(fields: [tenantId], references: [id])
+  manager        Employee?    @relation("BranchManager", fields: [managerEmployeeId], references: [id])
+  siteSupervisor Employee?    @relation("SiteSupervisor", fields: [siteSupervisorEmployeeId], references: [id])
+  employees      Employee[]
+  shifts         Shift[]
+  departments    Department[]
 
   @@map("branches")
 }
@@ -209,7 +211,7 @@ model Employee {
   photo          String?        // مسار صورة الموظف
   hireDate       DateTime
   status         EmployeeStatus @default(ACTIVE)
-  email          String?
+  email          String?        @unique // فريد عالمياً — تسجيل الدخول يبحث بالبريد فقط بلا تحديد شركة
   phone          String?
   passwordHash   String?
   createdAt      DateTime       @default(now())
@@ -232,11 +234,16 @@ model Employee {
   rotationMemberships RotationGroupMember[]
   headedDepartments Department[]    @relation("DeptHead")
   managedBranches   Branch[]        @relation("BranchManager")
+  supervisedSites   Branch[]        @relation("SiteSupervisor")
+  supervisedRotationGroups RotationGroup[] @relation("PeriodSupervisor")
   onboardingRequests OnboardingRequest[]
   approvalCases     ApprovalCase[]
   approvalActions   ApprovalAction[]
 
   @@unique([tenantId, employeeCode])
+  @@unique([tenantId, phone])
+  @@unique([tenantId, nationalId])
+  @@unique([tenantId, iban])
   @@map("employees")
 }
 
@@ -417,13 +424,15 @@ model RotationStep {
 }
 
 model RotationGroup {
-  id     String @id @default(uuid())
-  planId String
-  name   String
-  order  Int    @default(0)
+  id                   String @id @default(uuid())
+  planId               String
+  name                 String
+  order                Int    @default(0)
+  supervisorEmployeeId String? // مشرف الفترة — المسؤول عن هذه المجموعة/الفترة الدورانية
 
-  plan    RotationPlan          @relation(fields: [planId], references: [id], onDelete: Cascade)
-  members RotationGroupMember[]
+  plan       RotationPlan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  supervisor Employee?             @relation("PeriodSupervisor", fields: [supervisorEmployeeId], references: [id])
+  members    RotationGroupMember[]
 
   @@map("rotation_groups")
 }

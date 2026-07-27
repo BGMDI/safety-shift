@@ -12,6 +12,30 @@ function buildFullName(parts: { firstName?: string; fatherName?: string; grandfa
     .join(' ')
 }
 
+/** يحوّل النص الفارغ إلى null بدل تخزينه كقيمة حقيقية — يمنع تعارض القيم الفريدة بين موظفين لم يُدخلا شيئاً */
+function emptyToNull<T extends string | undefined>(v: T): string | null | undefined {
+  if (v === undefined) return undefined
+  const trimmed = v.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+const DUPLICATE_FIELD_LABEL: Record<string, string> = {
+  email: 'البريد الإلكتروني',
+  phone: 'رقم الجوال',
+  nationalId: 'رقم الهوية/الإقامة',
+  iban: 'رقم الحساب البنكي (IBAN)',
+  employeeCode: 'كود الموظف',
+}
+
+/** يحوّل خطأ تعارض القيم الفريدة من Prisma (P2002) إلى رسالة عربية واضحة تحدد الحقل المكرر */
+function duplicateFieldMessage(error: any): string | null {
+  if (error?.code !== 'P2002') return null
+  const target: string[] = Array.isArray(error.meta?.target) ? error.meta.target : [String(error.meta?.target ?? '')]
+  const field = target.find(t => DUPLICATE_FIELD_LABEL[t]) ?? target[target.length - 1]
+  const label = DUPLICATE_FIELD_LABEL[field] ?? 'أحد الحقول'
+  return `${label} مستخدم مسبقاً — لا يمكن تكراره لموظف آخر`
+}
+
 @Injectable()
 export class EmployeesService {
   private readonly select = {
@@ -122,32 +146,38 @@ export class EmployeesService {
     const fullName = hasNameParts ? buildFullName(nameParts) : (dto.fullName ?? '')
     if (!fullName) throw new Error('يجب إدخال اسم الموظف')
 
-    return prisma.employee.create({
-      data: {
-        tenantId,
-        branchId: dto.branchId,
-        departmentId: dto.departmentId,
-        jobTitleId: dto.jobTitleId,
-        employeeCode: code,
-        fullName,
-        firstName: dto.firstName,
-        fatherName: dto.fatherName,
-        grandfatherName: dto.grandfatherName,
-        familyName: dto.familyName,
-        nationalId: dto.nationalId,
-        idExpiryDate: dto.idExpiryDate ? new Date(dto.idExpiryDate) : undefined,
-        nationality: dto.nationality,
-        birthDate: (dto as any).birthDate ? new Date((dto as any).birthDate) : undefined,
-        qualification: (dto as any).qualification,
-        specialization: (dto as any).specialization,
-        iban: dto.iban,
-        email: dto.email,
-        phone: dto.phone,
-        hireDate: new Date(dto.hireDate),
-        passwordHash,
-      },
-      select: this.select,
-    })
+    try {
+      return await prisma.employee.create({
+        data: {
+          tenantId,
+          branchId: dto.branchId,
+          departmentId: dto.departmentId,
+          jobTitleId: dto.jobTitleId,
+          employeeCode: code,
+          fullName,
+          firstName: dto.firstName,
+          fatherName: dto.fatherName,
+          grandfatherName: dto.grandfatherName,
+          familyName: dto.familyName,
+          nationalId: emptyToNull(dto.nationalId),
+          idExpiryDate: dto.idExpiryDate ? new Date(dto.idExpiryDate) : undefined,
+          nationality: dto.nationality,
+          birthDate: (dto as any).birthDate ? new Date((dto as any).birthDate) : undefined,
+          qualification: (dto as any).qualification,
+          specialization: (dto as any).specialization,
+          iban: emptyToNull(dto.iban),
+          email: emptyToNull(dto.email),
+          phone: emptyToNull(dto.phone),
+          hireDate: new Date(dto.hireDate),
+          passwordHash,
+        },
+        select: this.select,
+      })
+    } catch (e: any) {
+      const msg = duplicateFieldMessage(e)
+      if (msg) throw new ConflictException(msg)
+      throw e
+    }
   }
 
   async update(tenantId: string, id: string, dto: UpdateEmployeeDto) {
@@ -179,8 +209,19 @@ export class EmployeesService {
       if (computed) data.fullName = computed
     }
 
-    Object.keys(data).forEach(k => { if (data[k] === '' || data[k] === undefined) delete data[k] })
-    return prisma.employee.update({ where: { id }, data, select: this.select })
+    // '' يعني أن المستخدم أفرغ الحقل عمداً فيُحوَّل إلى null، أما undefined فيعني أن الحقل لم يُرسَل أصلاً فيُستثنى
+    Object.keys(data).forEach(k => {
+      if (data[k] === undefined) { delete data[k]; return }
+      if (data[k] === '') data[k] = null
+    })
+
+    try {
+      return await prisma.employee.update({ where: { id }, data, select: this.select })
+    } catch (e: any) {
+      const msg = duplicateFieldMessage(e)
+      if (msg) throw new ConflictException(msg)
+      throw e
+    }
   }
 
   async updatePhoto(tenantId: string, id: string, photoUrl: string) {

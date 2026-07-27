@@ -9,7 +9,7 @@ import { useAuth } from '../../../hooks/useAuth'
 ══════════════════════════════════════════ */
 interface EmpOption { id: string; fullName: string; employeeCode: string }
 interface Dept     { id: string; name: string; headEmployeeId?: string | null; head?: EmpOption | null; _count: { employees: number } }
-interface Branch   { id: string; name: string; location: string | null; managerEmployeeId?: string | null; manager?: EmpOption | null; _count: { employees: number }; departments: Dept[] }
+interface Branch   { id: string; name: string; location: string | null; managerEmployeeId?: string | null; manager?: EmpOption | null; siteSupervisorEmployeeId?: string | null; siteSupervisor?: EmpOption | null; _count: { employees: number }; departments: Dept[] }
 interface FreeDept { id: string; name: string; branch: { id: string; name: string } | null; headEmployeeId?: string | null; head?: EmpOption | null; _count: { employees: number; children: number } }
 interface JobTitle { id: string; name: string; grade: string | null; baseSalary: number; isShiftEligible: boolean; _count: { employees: number } }
 
@@ -86,6 +86,7 @@ function OrgTab() {
   const [freeName, setFreeName]       = useState('')
   const [savingFree, setSavingFree]   = useState(false)
   const [managerPickerOpen, setManagerPickerOpen] = useState<string | null>(null)
+  const [siteSupervisorPickerOpen, setSiteSupervisorPickerOpen] = useState<string | null>(null)
 
   const load = async () => {
     const [brRes, deptRes, empRes] = await Promise.all([
@@ -106,6 +107,10 @@ function OrgTab() {
   }
   const setBranchManager = async (branchId: string, managerEmployeeId: string) => {
     await api.put(`/branches/${branchId}`, { managerEmployeeId: managerEmployeeId || null }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
+    load()
+  }
+  const setSiteSupervisor = async (branchId: string, siteSupervisorEmployeeId: string) => {
+    await api.put(`/branches/${branchId}`, { siteSupervisorEmployeeId: siteSupervisorEmployeeId || null }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
     load()
   }
 
@@ -295,6 +300,23 @@ function OrgTab() {
                     ) : (
                       <button onClick={() => setManagerPickerOpen(b.id)} className="text-xs text-blue-600 hover:underline">
                         {b.manager?.fullName ?? 'تعيين مدير'}
+                      </button>
+                    )}
+                  </div>
+                  {/* مشرف الموقع — المسؤول الميداني عن هذا الموقع، منفصل عن مدير الفرع الإداري */}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-xs text-gray-400">🦺 مشرف الموقع:</span>
+                    {siteSupervisorPickerOpen === b.id ? (
+                      <select autoFocus defaultValue={b.siteSupervisorEmployeeId ?? ''}
+                        onChange={e => { setSiteSupervisor(b.id, e.target.value); setSiteSupervisorPickerOpen(null) }}
+                        onBlur={() => setSiteSupervisorPickerOpen(null)}
+                        className="text-xs border rounded px-1.5 py-0.5 bg-white">
+                        <option value="">— بلا مشرف —</option>
+                        {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+                      </select>
+                    ) : (
+                      <button onClick={() => setSiteSupervisorPickerOpen(b.id)} className="text-xs text-blue-600 hover:underline">
+                        {b.siteSupervisor?.fullName ?? 'تعيين مشرف'}
                       </button>
                     )}
                   </div>

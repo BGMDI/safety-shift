@@ -44,6 +44,15 @@ export class RotationsController {
     return this.svc.removeGroup(u.tenantId, groupId)
   }
 
+  @Put('groups/:groupId/supervisor') @Roles('super_admin', 'hr_manager')
+  setGroupSupervisor(
+    @CurrentUser() u: JwtPayload,
+    @Param('groupId') groupId: string,
+    @Body() body: { employeeId: string | null },
+  ) {
+    return this.svc.setGroupSupervisor(u.tenantId, groupId, body.employeeId)
+  }
+
   @Post('groups/:groupId/members') @Roles('super_admin', 'hr_manager')
   addMembers(
     @CurrentUser() u: JwtPayload,

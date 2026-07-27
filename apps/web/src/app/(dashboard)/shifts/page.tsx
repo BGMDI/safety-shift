@@ -311,7 +311,7 @@ const inp = 'border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2
    خطط تدوير الشفتات
 ══════════════════════════════════════════ */
 interface RotMember { id: string; employee: { id: string; fullName: string; employeeCode: string }; pinnedShift?: { id: string; name: string } | null }
-interface RotGroup { id: string; name: string; order: number; members: RotMember[] }
+interface RotGroup { id: string; name: string; order: number; members: RotMember[]; supervisor?: { id: string; fullName: string; employeeCode: string } | null }
 interface RotStep { id: string; order: number; days: number; shift: { id: string; name: string; startTime: string; endTime: string } }
 interface RotPlan {
   id: string; name: string
@@ -440,6 +440,12 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
 
   const pinMember = async (groupId: string, employeeId: string, shiftId: string | null) => {
     await api.put(`/rotations/groups/${groupId}/members/${employeeId}/pin`, { shiftId })
+      .catch((e: any) => alert(e.response?.data?.message ?? 'خطأ'))
+    load()
+  }
+
+  const setGroupSupervisor = async (groupId: string, employeeId: string | null) => {
+    await api.put(`/rotations/groups/${groupId}/supervisor`, { employeeId })
       .catch((e: any) => alert(e.response?.data?.message ?? 'خطأ'))
     load()
   }
@@ -717,6 +723,14 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-sm font-bold text-gray-700">{g.name}</p>
                         <span className="text-xs text-gray-400">{g.members.length}</span>
+                      </div>
+                      <div className="mb-2">
+                        <select value={g.supervisor?.id ?? ''}
+                          onChange={e => setGroupSupervisor(g.id, e.target.value || null)}
+                          className={`w-full border rounded-lg px-1.5 py-1 text-[11px] ${g.supervisor ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-gray-400 border-gray-200'}`}>
+                          <option value="">👤 بلا مشرف فترة</option>
+                          {employees.map(e => <option key={e.id} value={e.id}>👤 مشرف الفترة: {e.fullName}</option>)}
+                        </select>
                       </div>
                       <div className="space-y-1 mb-2 max-h-52 overflow-y-auto">
                         {g.members.map(m => (
