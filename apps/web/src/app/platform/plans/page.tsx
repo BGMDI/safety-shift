@@ -68,9 +68,12 @@ export default function PlatformPlansPage() {
           <a href="/platform/tenants" className="text-xs" style={{ color: 'var(--brand)' }}>← الشركات المشتركة</a>
           <h1 className="text-2xl font-extrabold mt-1" style={{ color: 'var(--ink)' }}>خطط الاشتراك</h1>
         </div>
-        <button onClick={() => setShowCreate(v => !v)} className="text-sm font-semibold text-white px-4 py-2 rounded-lg" style={{ background: 'var(--brand)' }}>
-          {showCreate ? '✕ إلغاء' : '+ خطة جديدة'}
-        </button>
+        <div className="flex items-center gap-2">
+          <a href="/platform/dashboard" className="text-sm px-4 py-2 rounded-lg" style={{ color: 'var(--brand)' }}>📊 الداشبورد</a>
+          <button onClick={() => setShowCreate(v => !v)} className="text-sm font-semibold text-white px-4 py-2 rounded-lg" style={{ background: 'var(--brand)' }}>
+            {showCreate ? '✕ إلغاء' : '+ خطة جديدة'}
+          </button>
+        </div>
       </div>
 
       {showCreate && (

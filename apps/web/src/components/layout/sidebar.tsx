@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { getRoles, getModules } from '../../lib/auth'
+import { api } from '../../lib/api'
 import { ThemeToggle } from './theme-toggle'
 
 type Access = 'all' | 'mgmt' | 'hr' | 'super'
@@ -64,12 +65,18 @@ function canAccess(access: Access, roles: string[]): boolean {
   return false
 }
 
+interface TenantBranding { name: string; logo: string | null }
+
 export function Sidebar() {
   const pathname = usePathname()
   const [roles, setRoles] = useState<string[]>([])
   const [modules, setModules] = useState<string[]>([])
+  const [tenant, setTenant] = useState<TenantBranding | null>(null)
 
-  useEffect(() => { setRoles(getRoles()); setModules(getModules()) }, [])
+  useEffect(() => {
+    setRoles(getRoles()); setModules(getModules())
+    api.get('/tenants/me').then(r => setTenant(r.data)).catch(() => {})
+  }, [])
 
   // صفّي المجموعات والعناصر حسب دور المستخدم وحسب الأقسام المفعّلة في باقة الاشتراك
   const groups = navGroups
@@ -85,14 +92,18 @@ export function Sidebar() {
     <aside className="w-64 min-h-screen flex flex-col flex-shrink-0"
       style={{ background: 'linear-gradient(180deg, var(--brand-2), #0A1F1B 70%)', color: '#E7EEEB' }}>
       <div className="p-5 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,.08)' }}>
-        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center"
+        <div className="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center"
           style={{ background: 'rgba(255,255,255,.1)' }}>
-          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/>
-          </svg>
+          {tenant?.logo ? (
+            <img src={`${process.env.NEXT_PUBLIC_API_URL}${tenant.logo}`} alt={tenant.name} className="w-full h-full object-cover" />
+          ) : (
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/>
+            </svg>
+          )}
         </div>
         <div className="min-w-0">
-          <h2 className="text-sm font-bold truncate">نظام الشِّفتات</h2>
+          <h2 className="text-sm font-bold truncate">{tenant?.name ?? 'نظام الشِّفتات'}</h2>
           <p className="text-xs mt-0.5 truncate" style={{ color: 'rgba(231,238,235,.55)' }}>
             {isEmployee ? 'الخدمة الذاتية للموظف' : 'إدارة الموارد البشرية'}
           </p>

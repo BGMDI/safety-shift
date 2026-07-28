@@ -3,7 +3,7 @@ import * as bcrypt from 'bcrypt'
 import { prisma } from '@shift-saas/database'
 import {
   CreateTemplateDto, UpdateTemplateDto,
-  CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto,
+  CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto, UpdateTenantInfoDto,
 } from './dto/platform.dto'
 
 const CYCLE_DAYS: Record<string, number> = { MONTHLY: 30, QUARTERLY: 90, ANNUAL: 365 }
@@ -63,6 +63,8 @@ export class PlatformService {
       ...t,
       daysRemaining: t.subscriptionEndsAt ? Math.ceil((t.subscriptionEndsAt.getTime() - now.getTime()) / 86400000) : null,
       isExpired: t.subscriptionEndsAt ? t.subscriptionEndsAt < now : false,
+      usersUsed: t._count.employees,
+      usersRemaining: t.maxUsers != null ? Math.max(0, t.maxUsers - t._count.employees) : null,
     }))
   }
 
@@ -75,7 +77,31 @@ export class PlatformService {
       },
     })
     if (!t) throw new NotFoundException('الشركة غير موجودة')
-    return t
+    return {
+      ...t,
+      usersUsed: t._count.employees,
+      usersRemaining: t.maxUsers != null ? Math.max(0, t.maxUsers - t._count.employees) : null,
+    }
+  }
+
+  /** تعديل اسم الشركة و/أو الحد الأقصى لعدد المستخدمين */
+  async updateTenantInfo(id: string, dto: UpdateTenantInfoDto) {
+    const t = await prisma.tenant.findUnique({ where: { id } })
+    if (!t) throw new NotFoundException('الشركة غير موجودة')
+    return prisma.tenant.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.maxUsers !== undefined && { maxUsers: dto.maxUsers }),
+      },
+    })
+  }
+
+  /** تحديث شعار الشركة بعد رفعه */
+  async updateTenantLogo(id: string, logoUrl: string) {
+    const t = await prisma.tenant.findUnique({ where: { id } })
+    if (!t) throw new NotFoundException('الشركة غير موجودة')
+    return prisma.tenant.update({ where: { id }, data: { logo: logoUrl } })
   }
 
   /** إنشاء شركة جديدة كاملة: الشركة + فرع افتراضي + الأدوار الأساسية + حساب المدير الأول */
@@ -100,6 +126,7 @@ export class PlatformService {
         enabledModules: (template?.modules ?? []) as any,
         subscriptionStartsAt: start,
         subscriptionEndsAt: end,
+        maxUsers: dto.maxUsers,
       },
     })
 

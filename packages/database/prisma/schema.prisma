@@ -28,6 +28,7 @@ model Tenant {
   subscriptionTemplate   SubscriptionTemplate? @relation(fields: [subscriptionTemplateId], references: [id])
   subscriptionStartsAt   DateTime?
   subscriptionEndsAt     DateTime?             // عند تجاوزه يُقفل الدخول تلقائياً (planStatus → EXPIRED)
+  maxUsers               Int?                  // الحد الأقصى لعدد المستخدمين (الموظفين) المسموح لهذا الاشتراك — فارغ = بلا حد
 
   branches          Branch[]
   departments       Department[]

@@ -1,11 +1,25 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common'
+import {
+  Controller, Get, Post, Put, Delete, Body, Param, UseGuards,
+  UseInterceptors, UploadedFile, BadRequestException,
+} from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
+import { diskStorage } from 'multer'
+import { extname, join } from 'path'
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { PlatformAuthGuard } from '../../common/guards/platform-auth.guard'
 import { PlatformService } from './platform.service'
 import {
   CreateTemplateDto, UpdateTemplateDto,
-  CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto,
+  CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto, UpdateTenantInfoDto,
 } from './dto/platform.dto'
+
+const logoStorage = diskStorage({
+  destination: join(process.cwd(), 'uploads', 'tenants'),
+  filename: (_req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9)
+    cb(null, unique + extname(file.originalname))
+  },
+})
 
 @ApiTags('Platform')
 @ApiBearerAuth()
@@ -24,8 +38,26 @@ export class PlatformController {
   @Get('tenants') listTenants() { return this.svc.listTenants() }
   @Get('tenants/:id') getTenant(@Param('id') id: string) { return this.svc.getTenant(id) }
   @Post('tenants') createTenant(@Body() dto: CreateTenantDto) { return this.svc.createTenant(dto) }
+  @Put('tenants/:id') updateInfo(@Param('id') id: string, @Body() dto: UpdateTenantInfoDto) { return this.svc.updateTenantInfo(id, dto) }
   @Put('tenants/:id/modules') updateModules(@Param('id') id: string, @Body() dto: UpdateTenantModulesDto) { return this.svc.updateTenantModules(id, dto) }
   @Put('tenants/:id/extend') extend(@Param('id') id: string, @Body() dto: ExtendSubscriptionDto) { return this.svc.extendSubscription(id, dto) }
   @Put('tenants/:id/suspend') suspend(@Param('id') id: string) { return this.svc.suspendTenant(id) }
   @Put('tenants/:id/reactivate') reactivate(@Param('id') id: string) { return this.svc.reactivateTenant(id) }
+
+  @Post('tenants/:id/logo')
+  @UseInterceptors(FileInterceptor('logo', {
+    storage: logoStorage,
+    fileFilter: (_req, file, cb) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png|webp|svg\+xml)$/i)) {
+        return cb(new BadRequestException('يُسمح فقط بصور JPG/PNG/WebP/SVG'), false)
+      }
+      cb(null, true)
+    },
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  }))
+  async uploadLogo(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('لم يتم رفع شعار')
+    const url = `/uploads/tenants/${file.filename}`
+    return this.svc.updateTenantLogo(id, url)
+  }
 }

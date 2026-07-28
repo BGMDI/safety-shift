@@ -21,6 +21,7 @@ export class CreateTenantDto {
   @IsString() name!: string
   @IsOptional() @IsUUID() subscriptionTemplateId?: string
   @IsIn(BILLING_CYCLES) billingCycle!: 'MONTHLY' | 'QUARTERLY' | 'ANNUAL'
+  @IsOptional() @Type(() => Number) @IsNumber() maxUsers?: number
   // بيانات أول مستخدم (super_admin) في الشركة الجديدة
   @IsString() ownerFullName!: string
   @IsString() ownerEmail!: string
@@ -33,6 +34,11 @@ export class UpdateTenantModulesDto {
 
 export class ExtendSubscriptionDto {
   @IsIn(BILLING_CYCLES) billingCycle!: 'MONTHLY' | 'QUARTERLY' | 'ANNUAL'
+}
+
+export class UpdateTenantInfoDto {
+  @IsOptional() @IsString() name?: string
+  @IsOptional() @Type(() => Number) @IsNumber() maxUsers?: number | null
 }
 
 export { MODULES, BILLING_CYCLES }

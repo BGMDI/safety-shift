@@ -5,13 +5,17 @@ import { platformApi } from '../../../lib/platform-api'
 
 interface Template { id: string; name: string; modules: string[]; monthlyPrice: string | null; isActive: boolean }
 interface Tenant {
-  id: string; name: string; planStatus: string; plan: string
+  id: string; name: string; logo: string | null; planStatus: string; plan: string
   enabledModules: string[]
   subscriptionTemplate: { id: string; name: string } | null
   subscriptionStartsAt: string | null; subscriptionEndsAt: string | null
   daysRemaining: number | null; isExpired: boolean
+  maxUsers: number | null; usersUsed: number; usersRemaining: number | null
   _count: { employees: number }
 }
+
+const PLAN_LABEL: Record<string, string> = { MONTHLY: 'شهري', QUARTERLY: 'ربع سنوي', ANNUAL: 'سنوي' }
+const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'
 
 const MODULE_LABEL: Record<string, string> = {
   ATTENDANCE: '🕐 الحضور والانصراف', SHIFTS: '🔄 الشفتات', LEAVES: '🌴 الإجازات',
@@ -36,7 +40,10 @@ export default function PlatformTenantsPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const [form, setForm] = useState({ name: '', subscriptionTemplateId: '', billingCycle: 'MONTHLY', ownerFullName: '', ownerEmail: '', ownerPassword: '' })
+  const [form, setForm] = useState({ name: '', subscriptionTemplateId: '', billingCycle: 'MONTHLY', maxUsers: '', ownerFullName: '', ownerEmail: '', ownerPassword: '' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ name: '', maxUsers: '' })
+  const [uploadingLogo, setUploadingLogo] = useState<string | null>(null)
 
   const load = async () => {
     const token = localStorage.getItem('platform_access_token')
@@ -55,11 +62,39 @@ export default function PlatformTenantsPage() {
     if (!form.name || !form.ownerFullName || !form.ownerEmail || !form.ownerPassword) return
     setSaving(true)
     try {
-      await platformApi.post('/platform/tenants', form)
-      setForm({ name: '', subscriptionTemplateId: '', billingCycle: 'MONTHLY', ownerFullName: '', ownerEmail: '', ownerPassword: '' })
+      await platformApi.post('/platform/tenants', { ...form, maxUsers: form.maxUsers ? Number(form.maxUsers) : undefined })
+      setForm({ name: '', subscriptionTemplateId: '', billingCycle: 'MONTHLY', maxUsers: '', ownerFullName: '', ownerEmail: '', ownerPassword: '' })
       setShowCreate(false); load()
     } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
     finally { setSaving(false) }
+  }
+
+  const startEdit = (t: Tenant) => {
+    setEditingId(t.id)
+    setEditForm({ name: t.name, maxUsers: t.maxUsers != null ? String(t.maxUsers) : '' })
+  }
+
+  const saveEdit = async (id: string) => {
+    setSaving(true)
+    try {
+      await platformApi.put(`/platform/tenants/${id}`, {
+        name: editForm.name,
+        maxUsers: editForm.maxUsers === '' ? null : Number(editForm.maxUsers),
+      })
+      setEditingId(null); load()
+    } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
+    finally { setSaving(false) }
+  }
+
+  const uploadLogo = async (id: string, file: File) => {
+    setUploadingLogo(id)
+    const fd = new FormData()
+    fd.append('logo', file)
+    try {
+      await platformApi.post(`/platform/tenants/${id}/logo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      load()
+    } catch (e: any) { alert(e.response?.data?.message ?? 'فشل رفع الشعار') }
+    finally { setUploadingLogo(null) }
   }
 
   const toggleModule = async (tenant: Tenant, mod: string) => {
@@ -99,6 +134,7 @@ export default function PlatformTenantsPage() {
           <h1 className="text-2xl font-extrabold" style={{ color: 'var(--ink)' }}>الشركات المشتركة</h1>
         </div>
         <div className="flex items-center gap-2">
+          <a href="/platform/dashboard" className="text-sm px-4 py-2 rounded-lg" style={{ color: 'var(--brand)' }}>📊 الداشبورد</a>
           <a href="/platform/plans" className="text-sm px-4 py-2 rounded-lg" style={{ color: 'var(--brand)' }}>📋 خطط الاشتراك</a>
           <button onClick={() => setShowCreate(v => !v)} className="text-sm font-semibold text-white px-4 py-2 rounded-lg" style={{ background: 'var(--brand)' }}>
             {showCreate ? '✕ إلغاء' : '+ شركة جديدة'}
@@ -128,6 +164,8 @@ export default function PlatformTenantsPage() {
               <input type="email" value={form.ownerEmail} onChange={e => setForm(f => ({ ...f, ownerEmail: e.target.value }))} className={inp} style={inpStyle} /></div>
             <div><label className="text-xs block mb-1" style={{ color: 'var(--ink-2)' }}>كلمة مرور المدير *</label>
               <input type="password" value={form.ownerPassword} onChange={e => setForm(f => ({ ...f, ownerPassword: e.target.value }))} className={inp} style={inpStyle} /></div>
+            <div><label className="text-xs block mb-1" style={{ color: 'var(--ink-2)' }}>الحد الأقصى للمستخدمين</label>
+              <input type="number" min={1} placeholder="بلا حد" value={form.maxUsers} onChange={e => setForm(f => ({ ...f, maxUsers: e.target.value }))} className={inp} style={inpStyle} /></div>
           </div>
           <button onClick={createTenant} disabled={saving} className="text-sm font-semibold text-white px-5 py-2 rounded-lg disabled:opacity-50" style={{ background: 'var(--brand)' }}>
             {saving ? '⏳ جارٍ الإنشاء...' : '✓ إنشاء الشركة'}
@@ -142,9 +180,16 @@ export default function PlatformTenantsPage() {
           </div>
         ) : tenants.map(t => {
           const st = STATUS_LABEL[t.planStatus] ?? { label: t.planStatus, color: 'ink-3' }
+          const seatPct = t.maxUsers ? Math.min(100, Math.round((t.usersUsed / t.maxUsers) * 100)) : null
           return (
             <div key={t.id} className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--line)', boxShadow: 'var(--shadow)' }}>
               <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
+                <div className="w-10 h-10 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center text-lg font-bold"
+                  style={{ background: 'var(--surface-2)', color: 'var(--ink-3)' }}>
+                  {t.logo ? (
+                    <img src={`${process.env.NEXT_PUBLIC_API_URL}${t.logo}`} alt={t.name} className="w-full h-full object-cover" />
+                  ) : t.name.charAt(0)}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{t.name}</p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--ink-3)' }}>
@@ -152,6 +197,11 @@ export default function PlatformTenantsPage() {
                     {t.subscriptionTemplate ? ` · خطة ${t.subscriptionTemplate.name}` : ''}
                   </p>
                 </div>
+                {seatPct !== null && (
+                  <span className="text-xs tabular-nums" style={{ color: seatPct >= 100 ? 'var(--crit)' : 'var(--ink-3)' }}>
+                    👤 {t.usersUsed}/{t.maxUsers}
+                  </span>
+                )}
                 <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: `var(--${st.color}-soft)`, color: `var(--${st.color})` }}>{st.label}</span>
                 {t.daysRemaining !== null && (
                   <span className="text-xs tabular-nums" style={{ color: t.isExpired ? 'var(--crit)' : 'var(--ink-3)' }}>
@@ -163,7 +213,69 @@ export default function PlatformTenantsPage() {
 
               {expanded === t.id && (
                 <div className="px-5 pb-5 border-t" style={{ borderColor: 'var(--line)' }}>
-                  <div className="flex flex-wrap gap-2 mt-4 mb-4">
+                  <div className="grid grid-cols-2 gap-4 mt-4 mb-4">
+                    <div className="rounded-xl p-4" style={{ background: 'var(--surface-2)' }}>
+                      <p className="text-xs font-bold mb-2" style={{ color: 'var(--ink-2)' }}>📅 تفاصيل الاشتراك</p>
+                      <div className="text-xs space-y-1" style={{ color: 'var(--ink-3)' }}>
+                        <p>بداية الاشتراك: <span style={{ color: 'var(--ink)' }}>{fmtDate(t.subscriptionStartsAt)}</span></p>
+                        <p>نهاية الاشتراك: <span style={{ color: t.isExpired ? 'var(--crit)' : 'var(--ink)' }}>{fmtDate(t.subscriptionEndsAt)}</span></p>
+                        <p>دورة الفوترة: <span style={{ color: 'var(--ink)' }}>{PLAN_LABEL[t.plan] ?? t.plan}</span></p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl p-4" style={{ background: 'var(--surface-2)' }}>
+                      <p className="text-xs font-bold mb-2" style={{ color: 'var(--ink-2)' }}>👥 استخدام المقاعد</p>
+                      {t.maxUsers != null ? (
+                        <>
+                          <div className="h-2 rounded-full overflow-hidden mb-1.5" style={{ background: 'var(--line)' }}>
+                            <div className="h-full rounded-full" style={{ width: `${seatPct}%`, background: seatPct! >= 100 ? 'var(--crit)' : seatPct! >= 80 ? 'var(--warn)' : 'var(--good)' }} />
+                          </div>
+                          <p className="text-xs" style={{ color: 'var(--ink-3)' }}>
+                            {t.usersUsed} مستخدَم من {t.maxUsers} · متبقٍ {t.usersRemaining}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs" style={{ color: 'var(--ink-3)' }}>{t.usersUsed} مستخدَم · بلا حد أقصى</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--surface-2)' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold" style={{ color: 'var(--ink-2)' }}>🏷️ بيانات الشركة والشعار</p>
+                      {editingId !== t.id && (
+                        <button onClick={() => startEdit(t)} className="text-xs px-2.5 py-1 rounded-lg" style={{ background: 'var(--surface)', color: 'var(--brand)' }}>✎ تعديل</button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center text-xl font-bold"
+                        style={{ background: 'var(--surface)', color: 'var(--ink-3)' }}>
+                        {t.logo ? (
+                          <img src={`${process.env.NEXT_PUBLIC_API_URL}${t.logo}`} alt={t.name} className="w-full h-full object-cover" />
+                        ) : t.name.charAt(0)}
+                      </div>
+                      <label className="text-xs px-3 py-1.5 rounded-lg cursor-pointer" style={{ background: 'var(--surface)', color: 'var(--ink-2)', border: '1px solid var(--line)' }}>
+                        {uploadingLogo === t.id ? '⏳ جارٍ الرفع...' : '📤 رفع شعار'}
+                        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(t.id, f) }} />
+                      </label>
+                    </div>
+                    {editingId === t.id && (
+                      <div className="grid grid-cols-2 gap-3 mt-3">
+                        <div><label className="text-xs block mb-1" style={{ color: 'var(--ink-2)' }}>اسم الشركة</label>
+                          <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className={inp} style={inpStyle} /></div>
+                        <div><label className="text-xs block mb-1" style={{ color: 'var(--ink-2)' }}>الحد الأقصى للمستخدمين</label>
+                          <input type="number" min={1} placeholder="بلا حد" value={editForm.maxUsers} onChange={e => setEditForm(f => ({ ...f, maxUsers: e.target.value }))} className={inp} style={inpStyle} /></div>
+                        <div className="col-span-2 flex gap-2">
+                          <button onClick={() => saveEdit(t.id)} disabled={saving} className="text-xs font-semibold text-white px-4 py-2 rounded-lg disabled:opacity-50" style={{ background: 'var(--brand)' }}>
+                            {saving ? '⏳ جارٍ الحفظ...' : '✓ حفظ'}
+                          </button>
+                          <button onClick={() => setEditingId(null)} className="text-xs px-4 py-2 rounded-lg" style={{ color: 'var(--ink-3)' }}>إلغاء</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {ALL_MODULES.map(mod => {
                       const on = t.enabledModules.includes(mod)
                       return (
