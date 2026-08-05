@@ -370,7 +370,7 @@ export class LeavesService {
     if (!req) throw new NotFoundException('الطلب غير موجود')
     if (req.status !== 'PENDING') throw new BadRequestException('تم البت في هذا الطلب مسبقاً')
 
-    const trail = await this.approvals.getTrail('LEAVE', requestId)
+    const trail = await this.approvals.getTrail(tenantId, 'LEAVE', requestId)
     if (trail) {
       // مسار اعتماد متعدّد الخطوات — الأهلية محسوبة ديناميكياً (قد يكون الموافق رئيس قسم بدور موظف عادي)
       // approvals.decide يرمي ForbiddenException إن لم يكن actor.sub موافقاً مؤهّلاً للخطوة الحالية

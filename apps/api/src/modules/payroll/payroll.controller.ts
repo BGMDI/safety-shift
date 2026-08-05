@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { PayrollService } from './payroll.service'
@@ -18,7 +19,7 @@ export class PayrollController {
   constructor(private svc: PayrollService) {}
 
   /* قسائم راتبي — أي موظف يرى قسائمه المعتمدة فقط */
-  @Get('my')
+  @Get('my') @AnyEmployee()
   getMyPayslips(@CurrentUser() u: JwtPayload) { return this.svc.getEmployeePayslips(u.tenantId, u.sub) }
 
   @Get() @Roles('super_admin', 'hr_manager')

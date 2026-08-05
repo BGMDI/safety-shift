@@ -267,9 +267,11 @@ export class ApprovalsService {
   /* ══════════ استعلامات العرض ══════════ */
 
   /** أثر المسار الكامل لطلب معيّن — لصاحب الطلب أو الإدارة */
-  async getTrail(requestType: RequestType, requestId: string) {
-    const kase = await prisma.approvalCase.findUnique({
-      where: { requestType_requestId: { requestType: requestType as any, requestId } },
+  /** أثر مسار الاعتماد لطلب معيّن — مقيّد بالشركة إلزامياً: بدون tenantId كان أي موظف
+   *  يستطيع قراءة مسار اعتماد طلب في شركة أخرى (أسماء المعتمدين وملاحظاتهم) */
+  async getTrail(tenantId: string, requestType: RequestType, requestId: string) {
+    const kase = await prisma.approvalCase.findFirst({
+      where: { tenantId, requestType: requestType as any, requestId },
       include: {
         actions: {
           orderBy: { order: 'asc' },

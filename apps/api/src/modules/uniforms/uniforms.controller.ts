@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { isManager } from '../../common/auth.util'
@@ -19,21 +20,21 @@ export class UniformsController {
   constructor(private svc: UniformsService) {}
 
   /* طلبات بدلتي — أي موظف يرى طلباته فقط */
-  @Get('my')
+  @Get('my') @AnyEmployee()
   myRequests(@CurrentUser() u: JwtPayload) { return this.svc.getEmployeeRequests(u.tenantId, u.sub) }
 
   @Get() @Roles('super_admin', 'hr_manager', 'supervisor')
   getAll(@CurrentUser() u: JwtPayload, @Query('status') status?: string) { return this.svc.getAll(u.tenantId, status) }
 
   /* أي موظف يطلب بدلة لنفسه؛ الإدارة تطلب لأي موظف */
-  @Post()
+  @Post() @AnyEmployee()
   create(@CurrentUser() u: JwtPayload, @Body() body: any) {
     const employeeId = isManager(u) && body.employeeId ? body.employeeId : u.sub
     return this.svc.create(u.tenantId, { ...body, employeeId })
   }
 
   /* اعتماد/رفض الطلب — الأهلية محسوبة ديناميكياً (مسار اعتماد مُهيّأ) أو أدوار الإدارة عند عدم وجود مسار */
-  @Put(':id/status')
+  @Put(':id/status') @AnyEmployee()
   decide(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() body: { status: 'APPROVED' | 'REJECTED'; notes?: string }) {
     return this.svc.decide(u.tenantId, id, u, body.status, body.notes)
   }

@@ -5,6 +5,7 @@ import { RolesGuard } from '../../common/guards/roles.guard'
 import { ModuleGuard } from '../../common/guards/module.guard'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { ShiftsService } from './shifts.service'
 import { JwtPayload } from '@shift-saas/types'
@@ -47,7 +48,7 @@ export class ShiftsController {
   }
 
   /* جدولي الشخصي — أي موظف يرى شفتاته فقط */
-  @Get('my-schedule')
+  @Get('my-schedule') @AnyEmployee()
   mySchedule(
     @CurrentUser() user: JwtPayload,
     @Query('startDate') startDate: string,

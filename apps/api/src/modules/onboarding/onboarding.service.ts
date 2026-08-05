@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { prisma } from '@shift-saas/database'
 import { ApprovalsService } from '../approvals/approvals.service'
+import { isManager } from '../../common/auth.util'
+import { JwtPayload } from '@shift-saas/types'
 
 @Injectable()
 export class OnboardingService {
@@ -34,18 +36,20 @@ export class OnboardingService {
     return req
   }
 
-  async decide(tenantId: string, id: string, actorId: string, decision: 'APPROVED' | 'REJECTED', notes?: string) {
+  async decide(tenantId: string, id: string, actor: JwtPayload, decision: 'APPROVED' | 'REJECTED', notes?: string) {
     const req = await prisma.onboardingRequest.findFirst({ where: { id, tenantId } })
     if (!req) throw new NotFoundException('الطلب غير موجود')
     if (req.status !== 'PENDING') throw new BadRequestException('تم البتّ في هذا الطلب مسبقاً')
 
-    const trail = await this.approvals.getTrail('ONBOARDING', id)
+    const trail = await this.approvals.getTrail(tenantId, 'ONBOARDING', id)
     if (trail) {
-      const result = await this.approvals.decide(tenantId, 'ONBOARDING', id, actorId, decision, notes)
+      // approvals.decide يرمي ForbiddenException إن لم يكن actor موافقاً مؤهّلاً للخطوة الحالية
+      const result = await this.approvals.decide(tenantId, 'ONBOARDING', id, actor.sub, decision, notes)
       if (result.caseStatus === 'PENDING') return { message: `تم الاعتماد — بانتظار: ${result.currentStepLabel}` }
-      return prisma.onboardingRequest.update({ where: { id }, data: { status: result.caseStatus, approvedBy: actorId } })
+      return prisma.onboardingRequest.update({ where: { id }, data: { status: result.caseStatus, approvedBy: actor.sub } })
     }
-    // بلا مسار مُهيّأ — اعتماد مباشر (توافق مع الإصدار السابق)
-    return prisma.onboardingRequest.update({ where: { id }, data: { status: decision, approvedBy: actorId } })
+    // بلا مسار مُهيّأ — اعتماد مباشر مقيّد بأدوار الإدارة (مطابق لسلوك الإجازات والبدلات)
+    if (!isManager(actor)) throw new ForbiddenException('ليس لديك صلاحية اعتماد طلبات المباشرة')
+    return prisma.onboardingRequest.update({ where: { id }, data: { status: decision, approvedBy: actor.sub } })
   }
 }

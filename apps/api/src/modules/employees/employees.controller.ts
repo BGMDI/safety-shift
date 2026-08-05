@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { assertSelfOrManager } from '../../common/auth.util'
 import { EmployeesService } from './employees.service'
 import { CreateEmployeeDto } from './dto/create-employee.dto'
@@ -58,7 +59,7 @@ export class EmployeesController {
   }
 
   /** ملف الموظف — للإدارة أو الموظف نفسه فقط */
-  @Get(':id')
+  @Get(':id') @AnyEmployee()
   findOne(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     assertSelfOrManager(user, id)
     return this.employeesService.findOne(user.tenantId, id)

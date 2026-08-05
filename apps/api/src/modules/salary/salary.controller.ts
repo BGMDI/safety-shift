@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { assertSelfOrHR } from '../../common/auth.util'
 import { SalaryService } from './salary.service'
@@ -16,13 +17,13 @@ import { JwtPayload } from '@shift-saas/types'
 export class SalaryController {
   constructor(private svc: SalaryService) {}
 
-  @Get('employee/:id')
+  @Get('employee/:id') @AnyEmployee()
   getEmployeeSalary(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     assertSelfOrHR(u, id)
     return this.svc.getEmployeeSalary(u.tenantId, id)
   }
 
-  @Get('employee/:id/certificate')
+  @Get('employee/:id/certificate') @AnyEmployee()
   getCertificate(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     assertSelfOrHR(u, id)
     return this.svc.getSalaryCertificate(u.tenantId, id)

@@ -43,7 +43,7 @@ export class UniformsService {
     if (!req) throw new NotFoundException('الطلب غير موجود')
     if (req.status !== 'PENDING') throw new BadRequestException('تم البت في هذا الطلب مسبقاً')
 
-    const trail = await this.approvals.getTrail('UNIFORM', id)
+    const trail = await this.approvals.getTrail(tenantId, 'UNIFORM', id)
     if (trail) {
       const result = await this.approvals.decide(tenantId, 'UNIFORM', id, actor.sub, decision, notes)
       if (result.caseStatus === 'PENDING') return { ...req, pendingStep: result.currentStepLabel }

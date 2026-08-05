@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { ApprovalsService } from './approvals.service'
@@ -31,12 +32,16 @@ export class ApprovalsController {
   seedDefaults(@CurrentUser() u: JwtPayload) { return this.svc.seedDefaults(u.tenantId) }
 
   /* طلبات بانتظار موافقتي — بلا تقييد دور: الأهلية محسوبة ديناميكياً (رئيس قسم/مدير فرع قد يكون موظفاً عادياً بدور النظام) */
-  @Get('my-queue')
+  @Get('my-queue') @AnyEmployee()
   myQueue(@CurrentUser() u: JwtPayload) { return this.svc.getMyQueue(u.tenantId, u.sub) }
 
   /* أثر مسار الاعتماد لطلب معيّن */
-  @Get('trail/:requestType/:requestId')
-  trail(@Param('requestType') requestType: string, @Param('requestId') requestId: string) {
-    return this.svc.getTrail(requestType as any, requestId)
+  @Get('trail/:requestType/:requestId') @AnyEmployee()
+  trail(
+    @CurrentUser() u: JwtPayload,
+    @Param('requestType') requestType: string,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.svc.getTrail(u.tenantId, requestType as any, requestId)
   }
 }

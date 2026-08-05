@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { isManager } from '../../common/auth.util'
@@ -20,26 +21,26 @@ export class OnboardingController {
   constructor(private svc: OnboardingService) {}
 
   /* مباشراتي — أي موظف يرى طلباته فقط */
-  @Get('my')
+  @Get('my') @AnyEmployee()
   myRequests(@CurrentUser() u: JwtPayload) { return this.svc.getAll(u.tenantId, u.sub) }
 
   @Get() @Roles('super_admin', 'hr_manager', 'supervisor')
   getAll(@CurrentUser() u: JwtPayload) { return this.svc.getAll(u.tenantId) }
 
   /* الإدارة تنشئ مباشرة لأي موظف؛ الموظف ينشئ مباشرته الخاصة فقط (عودة من إجازة مثلاً) */
-  @Post()
+  @Post() @AnyEmployee()
   create(@CurrentUser() u: JwtPayload, @Body() dto: CreateOnboardingDto) {
     const employeeId = isManager(u) && dto.employeeId ? dto.employeeId : u.sub
     return this.svc.create(u.tenantId, { ...dto, employeeId })
   }
 
   /* البتّ في طلب مباشرة — الأهلية محسوبة ديناميكياً حسب مسار الاعتماد */
-  @Put(':id/decide')
+  @Put(':id/decide') @AnyEmployee()
   decide(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
     @Body() body: { decision: 'APPROVED' | 'REJECTED'; notes?: string },
   ) {
-    return this.svc.decide(u.tenantId, id, u.sub, body.decision, body.notes)
+    return this.svc.decide(u.tenantId, id, u, body.decision, body.notes)
   }
 }

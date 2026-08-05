@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { assertSelfOrManager, isManager } from '../../common/auth.util'
@@ -24,11 +25,11 @@ export class LeavesController {
   constructor(private svc: LeavesService) {}
 
   // ── أنواع الإجازات ──
-  @Get('types')
+  @Get('types') @AnyEmployee()
   getTypes(@CurrentUser() u: JwtPayload) { return this.svc.getLeaveTypes(u.tenantId) }
 
   /** قائمة أنواع الاحتساب مع تسمياتها العربية */
-  @Get('calc-types')
+  @Get('calc-types') @AnyEmployee()
   getCalcTypes() { return CALC_LABELS }
 
   @Post('types/seed-saudi-defaults') @Roles('super_admin', 'hr_manager')
@@ -56,7 +57,7 @@ export class LeavesController {
   }
 
   // ── أرصدة الإجازات — للإدارة أو الموظف نفسه ──
-  @Get('balances/:employeeId')
+  @Get('balances/:employeeId') @AnyEmployee()
   getBalances(@CurrentUser() u: JwtPayload, @Param('employeeId') eid: string) {
     assertSelfOrManager(u, eid)
     return this.svc.getEmployeeBalances(u.tenantId, eid)
@@ -78,7 +79,7 @@ export class LeavesController {
   }
 
   // ── طلبات الإجازات — الموظف العادي يرى طلباته فقط ──
-  @Get('requests')
+  @Get('requests') @AnyEmployee()
   getRequests(
     @CurrentUser() u: JwtPayload,
     @Query('employeeId') eid?: string,
@@ -89,14 +90,14 @@ export class LeavesController {
     return this.svc.getRequests(u.tenantId, scopedId, status)
   }
 
-  @Post('requests')
+  @Post('requests') @AnyEmployee()
   submitRequest(@CurrentUser() u: JwtPayload, @Body() dto: CreateLeaveRequestDto) {
     return this.svc.submitRequest(u.tenantId, u.sub, dto)
   }
 
   /* الأهلية محسوبة ديناميكياً داخل الخدمة: إمّا موافق مؤهّل ضمن مسار الاعتماد المُهيّأ،
      أو أحد أدوار الإدارة عند عدم وجود مسار مُهيّأ للشركة (سلوك احتياطي متوافق مع الإصدارات السابقة) */
-  @Put('requests/:id/approve')
+  @Put('requests/:id/approve') @AnyEmployee()
   approveRequest(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ApproveLeaveDto) {
     return this.svc.approveRequest(u.tenantId, id, u, dto)
   }

@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
 import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { AttendanceService } from './attendance.service'
@@ -38,13 +39,13 @@ export class AttendanceController {
   }
 
   /* سجلّي اليوم — للتحضير الذاتي */
-  @Get('me/today')
+  @Get('me/today') @AnyEmployee()
   getMyToday(@CurrentUser() u: JwtPayload) {
     return this.svc.getMyToday(u.tenantId, u.sub)
   }
 
   /* كشف حضوري الشخصي — أي موظف يرى سجله فقط */
-  @Get('me/logs')
+  @Get('me/logs') @AnyEmployee()
   getMyLogs(
     @CurrentUser() u: JwtPayload,
     @Query('month') month?: string,
@@ -71,7 +72,7 @@ export class AttendanceController {
   }
 
   /* تحضير ذاتي: حضور أو انصراف الآن */
-  @Post('self-check')
+  @Post('self-check') @AnyEmployee()
   selfCheck(@CurrentUser() u: JwtPayload, @Body() body: { type: 'in' | 'out' }) {
     return this.svc.selfCheck(u.tenantId, u.sub, body.type)
   }
