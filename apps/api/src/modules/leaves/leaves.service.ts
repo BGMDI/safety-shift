@@ -150,10 +150,31 @@ export class LeavesService {
   async removeLeaveType(tenantId: string, id: string) {
     const lt = await prisma.leaveType.findFirst({ where: { id, tenantId } })
     if (!lt) throw new NotFoundException('نوع الإجازة غير موجود')
-    const count = await prisma.leaveRequest.count({ where: { leaveTypeId: id } })
-    if (count > 0) throw new BadRequestException(`لا يمكن الحذف — يوجد ${count} طلب إجازة مرتبط`)
+    const reqCount = await prisma.leaveRequest.count({ where: { leaveTypeId: id } })
+    if (reqCount > 0) throw new BadRequestException(`لا يمكن الحذف — يوجد ${reqCount} طلب إجازة مرتبط`)
+    const balanceCount = await prisma.leaveBalance.count({ where: { leaveTypeId: id } })
+    if (balanceCount > 0) throw new BadRequestException(`لا يمكن الحذف — يوجد ${balanceCount} رصيد إجازة مسند لموظفين لهذا النوع`)
     await prisma.leaveType.delete({ where: { id } })
     return { message: 'تم الحذف' }
+  }
+
+  /** حذف رصيد إجازة واحد لموظف — يُمنع إن استُخدم منه أي يوم بالفعل */
+  async deleteLeaveBalance(tenantId: string, id: string) {
+    const bal = await prisma.leaveBalance.findFirst({ where: { id, tenantId } })
+    if (!bal) throw new NotFoundException('رصيد الإجازة غير موجود')
+    if (bal.usedDays > 0) throw new BadRequestException(`لا يمكن الحذف — استُخدم ${bal.usedDays} يوم من هذا الرصيد بالفعل`)
+    await prisma.leaveBalance.delete({ where: { id } })
+    return { message: 'تم حذف الرصيد' }
+  }
+
+  /** حذف كل الأرصدة المرتبطة بنوع إجازة دفعة واحدة — لتمكين حذف النوع نفسه بعدها */
+  async deleteBalancesByType(tenantId: string, leaveTypeId: string) {
+    const lt = await prisma.leaveType.findFirst({ where: { id: leaveTypeId, tenantId } })
+    if (!lt) throw new NotFoundException('نوع الإجازة غير موجود')
+    const usedCount = await prisma.leaveBalance.count({ where: { leaveTypeId, tenantId, usedDays: { gt: 0 } } })
+    if (usedCount > 0) throw new BadRequestException(`لا يمكن الحذف — ${usedCount} من الأرصدة استُخدم منها أيام بالفعل`)
+    const r = await prisma.leaveBalance.deleteMany({ where: { leaveTypeId, tenantId } })
+    return { deleted: r.count, message: `تم حذف ${r.count} رصيد` }
   }
 
   /** إنشاء أنواع نظام العمل السعودي تلقائياً */
@@ -213,9 +234,9 @@ export class LeavesService {
             const prevUsage = await prisma.leaveBalance.findFirst({
               where: { tenantId, employeeId: emp.id, leaveTypeId: lt.id, usedDays: { gt: 0 } },
             })
-            // تحقق أيضاً من طلبات مقبولة
+            // تحقق أيضاً من طلبات مقبولة (باستثناء ما حذفه مالك المنصة من سجل الشركة)
             const approvedReq = await prisma.leaveRequest.findFirst({
-              where: { tenantId, employeeId: emp.id, leaveTypeId: lt.id, status: 'APPROVED' },
+              where: { tenantId, employeeId: emp.id, leaveTypeId: lt.id, status: 'APPROVED', hiddenFromTenant: false },
             })
             entitledDays = (prevUsage || approvedReq) ? 0 : lt.maxDays
             break
@@ -287,6 +308,7 @@ export class LeavesService {
     return prisma.leaveRequest.findMany({
       where: {
         tenantId,
+        hiddenFromTenant: false, // ما حذفه مالك المنصة يبقى مخفياً عن الشركة تماماً
         ...(employeeId ? { employeeId } : {}),
         ...(status ? { status: status as any } : {}),
       },

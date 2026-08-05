@@ -64,6 +64,8 @@ export default function LeavesPage() {
   const [saving, setSaving]             = useState(false)
   const [seeding, setSeeding]           = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [balDeleteConfirm, setBalDeleteConfirm] = useState<string | null>(null)
+  const [deletingBalances, setDeletingBalances] = useState(false)
 
   /* أرصدة الإجازات */
   const [employees, setEmployees]       = useState<Employee[]>([])
@@ -170,6 +172,29 @@ export default function LeavesPage() {
     }
   }
 
+  /** حذف كل الأرصدة المرتبطة بنوع إجازة دفعة واحدة — لتمكين حذف النوع نفسه بعدها */
+  const handleDeleteBalances = async (id: string) => {
+    setDeletingBalances(true)
+    try {
+      const r = await api.delete(`/leaves/types/${id}/balances`)
+      alert(r.data.message ?? 'تم حذف الأرصدة'); setBalDeleteConfirm(null)
+      if (selEmp) loadBalances(selEmp)
+    } catch (e: any) {
+      alert(e.response?.data?.message ?? 'خطأ في حذف الأرصدة'); setBalDeleteConfirm(null)
+    } finally {
+      setDeletingBalances(false)
+    }
+  }
+
+  /** حذف رصيد موظف واحد لنوع إجازة معيّن */
+  const deleteBalanceRow = async (balanceId: string) => {
+    if (!confirm('حذف هذا الرصيد؟')) return
+    try {
+      await api.delete(`/leaves/balances/${balanceId}`)
+      loadBalances(selEmp)
+    } catch (e: any) { alert(e.response?.data?.message ?? 'خطأ في الحذف') }
+  }
+
   const seedSaudi = async () => {
     setSeeding(true)
     try {
@@ -233,7 +258,7 @@ export default function LeavesPage() {
     const found     = balances.find(b => b.leaveType.name === lt.name)
     const entitled  = found?.entitledDays ?? 0
     const used      = found?.usedDays ?? 0
-    return { id: lt.id, name: lt.name, maxDays: lt.maxDays, color: lt.color,
+    return { id: lt.id, balanceId: found?.id ?? null, name: lt.name, maxDays: lt.maxDays, color: lt.color,
              calcType: lt.calculationType, entitledDays: entitled, usedDays: used, remaining: entitled - used }
   })
 
@@ -357,11 +382,25 @@ export default function LeavesPage() {
                             <button onClick={() => setDeleteConfirm(null)}
                               className="bg-gray-100 text-xs px-2 py-0.5 rounded hover:bg-gray-200">لا</button>
                           </div>
+                        ) : balDeleteConfirm === t.id ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-500">حذف كل الأرصدة؟</span>
+                            <button onClick={() => handleDeleteBalances(t.id)} disabled={deletingBalances}
+                              className="bg-orange-600 text-white text-xs px-2 py-0.5 rounded hover:bg-orange-700 disabled:opacity-50">
+                              {deletingBalances ? '...' : 'نعم'}
+                            </button>
+                            <button onClick={() => setBalDeleteConfirm(null)}
+                              className="bg-gray-100 text-xs px-2 py-0.5 rounded hover:bg-gray-200">لا</button>
+                          </div>
                         ) : (
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
                             <button onClick={() => openEdit(t)}
                               className="text-blue-500 hover:text-blue-700 text-xs px-2 py-1 rounded border border-blue-200 hover:border-blue-400 transition">
                               تعديل
+                            </button>
+                            <button onClick={() => setBalDeleteConfirm(t.id)} title="حذف كل الأرصدة المرتبطة بهذا النوع"
+                              className="text-orange-500 hover:text-orange-700 text-xs px-2 py-1 rounded border border-orange-200 hover:border-orange-400 transition">
+                              🗑⚖
                             </button>
                             <button onClick={() => setDeleteConfirm(t.id)}
                               className="text-red-500 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-200 hover:border-red-400 transition">
@@ -629,10 +668,18 @@ export default function LeavesPage() {
                           </span>
                         </td>
                         <td className="px-3 py-3">
-                          <button onClick={() => saveBalance(row.id)}
-                            className="bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded text-xs font-medium transition">
-                            حفظ
-                          </button>
+                          <div className="flex gap-1">
+                            <button onClick={() => saveBalance(row.id)}
+                              className="bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded text-xs font-medium transition">
+                              حفظ
+                            </button>
+                            {row.balanceId && (
+                              <button onClick={() => deleteBalanceRow(row.balanceId!)} title="حذف هذا الرصيد"
+                                className="bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded text-xs font-medium transition">
+                                🗑
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )

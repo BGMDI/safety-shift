@@ -4,6 +4,19 @@ import { useRouter } from 'next/navigation'
 import { platformApi } from '../../../lib/platform-api'
 
 interface Template { id: string; name: string; modules: string[]; monthlyPrice: string | null; isActive: boolean }
+interface LeaveReq {
+  id: string; startDate: string; endDate: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; notes: string | null
+  hiddenFromTenant: boolean
+  employee: { fullName: string; employeeCode: string }
+  leaveType: { name: string }
+}
+interface PlatformAudit {
+  id: string; action: string; entityId: string | null; details: any; createdAt: string
+}
+const PLATFORM_ACTION_LABEL: Record<string, string> = {
+  TENANT_IMPERSONATE: '🔑 دخول كإدارة الشركة',
+  LEAVE_REQUEST_DELETE: '🗑 حذف طلب إجازة (من سجل الشركة فقط)',
+}
 interface Tenant {
   id: string; name: string; logo: string | null; planStatus: string; plan: string
   enabledModules: string[]
@@ -27,6 +40,9 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   TRIAL: { label: 'تجريبي', color: 'warn' }, ACTIVE: { label: 'نشط', color: 'good' },
   EXPIRED: { label: 'منتهٍ', color: 'crit' }, CANCELLED: { label: 'مُلغى', color: 'crit' },
 }
+const REQ_STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  PENDING: { label: 'معلّقة', color: 'warn' }, APPROVED: { label: 'مقبولة', color: 'good' }, REJECTED: { label: 'مرفوضة', color: 'crit' },
+}
 
 const inp = 'w-full rounded-lg px-3 py-2 text-sm outline-none'
 const inpStyle = { background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)' }
@@ -44,6 +60,10 @@ export default function PlatformTenantsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name: '', maxUsers: '' })
   const [uploadingLogo, setUploadingLogo] = useState<string | null>(null)
+  const [leaveReqs, setLeaveReqs] = useState<Record<string, LeaveReq[]>>({})
+  const [loadingLeaves, setLoadingLeaves] = useState<string | null>(null)
+  const [deletingReqId, setDeletingReqId] = useState<string | null>(null)
+  const [platformAudit, setPlatformAudit] = useState<Record<string, PlatformAudit[]>>({})
 
   const load = async () => {
     const token = localStorage.getItem('platform_access_token')
@@ -122,6 +142,50 @@ export default function PlatformTenantsPage() {
     load()
   }
 
+  const loadLeaveRequests = async (tenantId: string) => {
+    setLoadingLeaves(tenantId)
+    try {
+      const r = await platformApi.get(`/platform/tenants/${tenantId}/leave-requests`)
+      setLeaveReqs(prev => ({ ...prev, [tenantId]: r.data }))
+    } catch { /* تجاهل — القسم يظهر فارغاً */ }
+    finally { setLoadingLeaves(null) }
+  }
+
+  const loadPlatformAudit = async (tenantId: string) => {
+    try {
+      const r = await platformApi.get(`/platform/tenants/${tenantId}/platform-audit`)
+      setPlatformAudit(prev => ({ ...prev, [tenantId]: r.data }))
+    } catch { /* تجاهل */ }
+  }
+
+  const toggleExpand = (t: Tenant) => {
+    const next = expanded === t.id ? null : t.id
+    setExpanded(next)
+    if (next && !leaveReqs[t.id]) loadLeaveRequests(t.id)
+    if (next && !platformAudit[t.id]) loadPlatformAudit(t.id)
+  }
+
+  const deleteLeaveRequest = async (tenantId: string, reqId: string) => {
+    if (!confirm('حذف طلب الإجازة هذا من سجل الشركة؟ سيختفي عن الشركة تماماً، لكنه يبقى محفوظاً هنا في سجلك.')) return
+    setDeletingReqId(reqId)
+    try {
+      await platformApi.delete(`/platform/tenants/${tenantId}/leave-requests/${reqId}`)
+      loadLeaveRequests(tenantId)
+      loadPlatformAudit(tenantId)
+    } catch (e: any) { alert(e.response?.data?.message ?? 'خطأ في الحذف') }
+    finally { setDeletingReqId(null) }
+  }
+
+  const impersonate = async (id: string, name: string) => {
+    if (!confirm(`الدخول كإدارة شركة "${name}"؟ سيُفتح لوحة تحكم الشركة بكامل صلاحيات المدير في تبويب جديد.`)) return
+    try {
+      const r = await platformApi.post(`/platform/tenants/${id}/impersonate`)
+      const url = `${window.location.origin}/impersonate?t=${encodeURIComponent(r.data.accessToken)}&r=${encodeURIComponent(r.data.refreshToken)}`
+      window.open(url, '_blank')
+      loadPlatformAudit(id)
+    } catch (e: any) { alert(e.response?.data?.message ?? 'خطأ') }
+  }
+
   const logout = () => { localStorage.removeItem('platform_access_token'); router.push('/platform/login') }
 
   if (loading) return <div className="p-6 text-center" style={{ color: 'var(--ink-3)' }}>جارٍ التحميل...</div>
@@ -183,7 +247,7 @@ export default function PlatformTenantsPage() {
           const seatPct = t.maxUsers ? Math.min(100, Math.round((t.usersUsed / t.maxUsers) * 100)) : null
           return (
             <div key={t.id} className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--line)', boxShadow: 'var(--shadow)' }}>
-              <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
+              <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={() => toggleExpand(t)}>
                 <div className="w-10 h-10 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center text-lg font-bold"
                   style={{ background: 'var(--surface-2)', color: 'var(--ink-3)' }}>
                   {t.logo ? (
@@ -287,6 +351,11 @@ export default function PlatformTenantsPage() {
                       )
                     })}
                   </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <button onClick={() => impersonate(t.id, t.name)} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
+                      🔑 دخول كإدارة الشركة — تحكّم كامل بلا قيود أدوار
+                    </button>
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs" style={{ color: 'var(--ink-3)' }}>تمديد الاشتراك:</span>
                     {[['MONTHLY', 'شهر'], ['QUARTERLY', '3 أشهر'], ['ANNUAL', 'سنة']].map(([v, l]) => (
@@ -303,6 +372,59 @@ export default function PlatformTenantsPage() {
                       <button onClick={() => suspend(t.id, t.name)} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: 'var(--crit-soft)', color: 'var(--crit)' }}>
                         تعليق الاشتراك
                       </button>
+                    )}
+                  </div>
+
+                  {/* طلبات الإجازة — حذف حصري لمالك المنصة، والحذف يُخفي عن الشركة فقط ولا يمسح السجل */}
+                  <div className="rounded-xl p-4 mt-4" style={{ background: 'var(--surface-2)' }}>
+                    <p className="text-xs font-bold mb-2" style={{ color: 'var(--ink-2)' }}>🌴 طلبات الإجازة (حذف المقبولة أو المعلّقة فقط — يبقى السجل محفوظاً هنا)</p>
+                    {loadingLeaves === t.id ? (
+                      <p className="text-xs" style={{ color: 'var(--ink-3)' }}>جارٍ التحميل...</p>
+                    ) : !leaveReqs[t.id]?.length ? (
+                      <p className="text-xs" style={{ color: 'var(--ink-3)' }}>لا توجد طلبات إجازة</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                        {leaveReqs[t.id].map(r => {
+                          const rs = REQ_STATUS_LABEL[r.status] ?? { label: r.status, color: 'ink-3' }
+                          const canDelete = !r.hiddenFromTenant && (r.status === 'APPROVED' || r.status === 'PENDING')
+                          return (
+                            <div key={r.id} className="flex items-center gap-2 text-xs rounded-lg px-2.5 py-1.5" style={{ background: 'var(--surface)', opacity: r.hiddenFromTenant ? 0.55 : 1 }}>
+                              <span className="font-medium flex-shrink-0" style={{ color: 'var(--ink)' }}>{r.employee.fullName}</span>
+                              <span style={{ color: 'var(--ink-3)' }}>{r.leaveType.name}</span>
+                              <span style={{ color: 'var(--ink-3)' }}>{fmtDate(r.startDate)} ← {fmtDate(r.endDate)}</span>
+                              <span className="px-2 py-0.5 rounded-full font-medium" style={{ background: `var(--${rs.color}-soft)`, color: `var(--${rs.color})` }}>{rs.label}</span>
+                              {r.hiddenFromTenant && (
+                                <span className="px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--surface-2)', color: 'var(--ink-3)' }}>🙈 مخفي عن الشركة</span>
+                              )}
+                              <div className="flex-1" />
+                              {canDelete && (
+                                <button onClick={() => deleteLeaveRequest(t.id, r.id)} disabled={deletingReqId === r.id}
+                                  className="px-2 py-1 rounded-lg disabled:opacity-50" style={{ background: 'var(--crit-soft)', color: 'var(--crit)' }}>
+                                  {deletingReqId === r.id ? '...' : '🗑'}
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* سجل تدقيق مالك المنصة — منفصل تماماً عن سجل تدقيق الشركة، لا تراه الشركة أبداً */}
+                  <div className="rounded-xl p-4 mt-4" style={{ background: 'var(--surface-2)' }}>
+                    <p className="text-xs font-bold mb-2" style={{ color: 'var(--ink-2)' }}>🕵️ سجل تدقيق مالك المنصة (خاص بك — لا تراه الشركة)</p>
+                    {!platformAudit[t.id]?.length ? (
+                      <p className="text-xs" style={{ color: 'var(--ink-3)' }}>لا توجد إجراءات مسجّلة بعد</p>
+                    ) : (
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {platformAudit[t.id].map(a => (
+                          <div key={a.id} className="flex items-center gap-2 text-xs rounded-lg px-2.5 py-1.5" style={{ background: 'var(--surface)' }}>
+                            <span style={{ color: 'var(--ink)' }}>{PLATFORM_ACTION_LABEL[a.action] ?? a.action}</span>
+                            <div className="flex-1" />
+                            <span style={{ color: 'var(--ink-3)' }}>{new Date(a.createdAt).toLocaleString('ar-SA')}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>

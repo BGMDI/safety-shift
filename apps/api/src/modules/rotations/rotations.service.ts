@@ -258,15 +258,35 @@ export class RotationsService {
     return { message: 'تم حذف المجموعة' }
   }
 
+  /* ── يجد الموظفين من هذه القائمة العضوين بالفعل في مجموعة ضمن خطة أخرى (غير planId) ──
+     يُستخدم لمنع عضوية الموظف في أكثر من خطة تدوير في نفس الوقت، لأن تطبيق أي منهما
+     يستبدل جدول الأخرى بصمت خلال فترة التداخل (لا يوجد ربط زمني بين EmployeeShift والخطة) */
+  private async crossPlanConflicts(tenantId: string, planId: string, employeeIds: string[]) {
+    const map = new Map<string, string>()
+    if (!employeeIds.length) return map
+    const rows = await prisma.rotationGroupMember.findMany({
+      where: { employeeId: { in: employeeIds }, group: { planId: { not: planId }, plan: { tenantId } } },
+      include: { group: { include: { plan: { select: { name: true } } } } },
+    })
+    for (const r of rows) map.set(r.employeeId, r.group.plan.name)
+    return map
+  }
+
   async addMembers(tenantId: string, groupId: string, employeeIds: string[], pinnedShiftId?: string | null) {
     const group = await prisma.rotationGroup.findFirst({ where: { id: groupId, plan: { tenantId } } })
     if (!group) throw new NotFoundException('المجموعة غير موجودة')
-    if (!employeeIds?.length) return { added: 0 }
+    if (!employeeIds?.length) return { added: 0, blocked: [] }
 
     const valid = await prisma.employee.findMany({
       where: { tenantId, id: { in: employeeIds }, status: 'ACTIVE' },
-      select: { id: true },
+      select: { id: true, fullName: true },
     })
+
+    const conflicts = await this.crossPlanConflicts(tenantId, group.planId, valid.map(v => v.id))
+    const toAdd = valid.filter(v => !conflicts.has(v.id))
+    const blocked = valid
+      .filter(v => conflicts.has(v.id))
+      .map(v => ({ employeeId: v.id, employeeName: v.fullName, planName: conflicts.get(v.id)! }))
 
     let pinnedId: string | null = null
     if (pinnedShiftId) {
@@ -275,16 +295,18 @@ export class RotationsService {
       pinnedId = shift.id
     }
 
-    // أزل الموظف من أي مجموعة أخرى في نفس الخطة (لا يكون في مجموعتين)
-    await prisma.rotationGroupMember.deleteMany({
-      where: { employeeId: { in: valid.map(v => v.id) }, group: { planId: group.planId } },
-    })
+    if (toAdd.length) {
+      // أزل الموظف من أي مجموعة أخرى في نفس الخطة (لا يكون في مجموعتين من نفس الخطة)
+      await prisma.rotationGroupMember.deleteMany({
+        where: { employeeId: { in: toAdd.map(v => v.id) }, group: { planId: group.planId } },
+      })
 
-    await prisma.rotationGroupMember.createMany({
-      data: valid.map(v => ({ groupId, employeeId: v.id, pinnedShiftId: pinnedId })),
-      skipDuplicates: true,
-    })
-    return { added: valid.length }
+      await prisma.rotationGroupMember.createMany({
+        data: toAdd.map(v => ({ groupId, employeeId: v.id, pinnedShiftId: pinnedId })),
+        skipDuplicates: true,
+      })
+    }
+    return { added: toAdd.length, blocked }
   }
 
   /* ── تثبيت/إلغاء تثبيت عضو موجود على شفت معيّن (بلا تناوب) ── */
@@ -323,18 +345,27 @@ export class RotationsService {
 
     const valid = await prisma.employee.findMany({
       where: { tenantId, id: { in: employeeIds }, status: 'ACTIVE' },
-      select: { id: true },
+      select: { id: true, fullName: true },
     })
 
-    // امسح العضويات الحالية ثم وزّع بالتناوب
-    await prisma.rotationGroupMember.deleteMany({ where: { group: { planId } } })
-    await prisma.rotationGroupMember.createMany({
-      data: valid.map((v, i) => ({
-        groupId: plan.groups[i % plan.groups.length].id,
-        employeeId: v.id,
-      })),
-    })
-    return { distributed: valid.length, groups: plan.groups.length }
+    const conflicts = await this.crossPlanConflicts(tenantId, planId, valid.map(v => v.id))
+    const toDistribute = valid.filter(v => !conflicts.has(v.id))
+    const blocked = valid
+      .filter(v => conflicts.has(v.id))
+      .map(v => ({ employeeId: v.id, employeeName: v.fullName, planName: conflicts.get(v.id)! }))
+
+    // امسح العضويات الحالية ثم وزّع بالتناوب — فقط إن وُجد موظف واحد على الأقل غير متعارض،
+    // وإلا نُبقي التوزيع الحالي كما هو بدل مسحه بلا بديل (كان يُفرغ الخطة بالكامل بصمت)
+    if (toDistribute.length) {
+      await prisma.rotationGroupMember.deleteMany({ where: { group: { planId } } })
+      await prisma.rotationGroupMember.createMany({
+        data: toDistribute.map((v, i) => ({
+          groupId: plan.groups[i % plan.groups.length].id,
+          employeeId: v.id,
+        })),
+      })
+    }
+    return { distributed: toDistribute.length, groups: plan.groups.length, blocked }
   }
 
   /* ══════════ المعاينة والتطبيق ══════════ */
@@ -343,9 +374,33 @@ export class RotationsService {
     const plan = await this.getPlan(tenantId, planId)
     const horizon = Math.min(Math.max(days, 1), 90)
     const windowStart = new Date(startDate ?? dateOnly(plan.startDate > new Date() ? plan.startDate : new Date()))
+    const windowEnd = new Date(windowStart.getTime() + (horizon - 1) * DAY_MS)
     const stepInputs = plan.steps.map(s => ({ shiftId: s.shiftId, days: s.days }))
     // المصفوفة تمثّل فقط الأعضاء المتناوبين — الأعضاء المثبَّتين على شفت معيّن خارج دورة التناوب تماماً
     const matrix = this.buildMatrix({ ...plan, steps: stepInputs }, plan.groups.length, windowStart, horizon)
+
+    // موظفون نشطون لم ينضموا لهذه الخطة وليسوا في إجازة معتمدة خلال فترة التطبيق — لن يكون لديهم جدول
+    const memberIds = plan.groups.flatMap(g => g.members.map(m => m.employeeId))
+    const notInPlan = await prisma.employee.findMany({
+      where: { tenantId, status: 'ACTIVE', id: { notIn: memberIds.length ? memberIds : ['-'] } },
+      select: { id: true, fullName: true, employeeCode: true },
+    })
+    let uncoveredActive: { employeeId: string; employeeName: string; employeeCode: string }[] = []
+    if (notInPlan.length) {
+      const onLeave = await prisma.leaveRequest.findMany({
+        where: {
+          tenantId, status: 'APPROVED',
+          employeeId: { in: notInPlan.map(e => e.id) },
+          startDate: { lte: windowEnd }, endDate: { gte: windowStart },
+        },
+        select: { employeeId: true },
+      })
+      const onLeaveIds = new Set(onLeave.map(l => l.employeeId))
+      uncoveredActive = notInPlan
+        .filter(e => !onLeaveIds.has(e.id))
+        .map(e => ({ employeeId: e.id, employeeName: e.fullName, employeeCode: e.employeeCode }))
+    }
+
     return {
       planId: plan.id,
       startDate: dateOnly(windowStart),
@@ -359,6 +414,7 @@ export class RotationsService {
           .map(m => ({ employeeId: m.employeeId, employeeName: m.employee.fullName, shiftId: m.pinnedShiftId!, shiftName: m.pinnedShift?.name ?? '؟' })),
       })),
       matrix,
+      uncoveredActive,
     }
   }
 

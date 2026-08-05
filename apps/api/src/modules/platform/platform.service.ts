@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common'
 import * as bcrypt from 'bcrypt'
+import { JwtService } from '@nestjs/jwt'
 import { prisma } from '@shift-saas/database'
+import { JwtPayload, AuthTokens } from '@shift-saas/types'
 import {
   CreateTemplateDto, UpdateTemplateDto,
   CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto, UpdateTenantInfoDto,
@@ -11,6 +13,7 @@ const DEFAULT_ROLES = ['super_admin', 'hr_manager', 'supervisor', 'employee']
 
 @Injectable()
 export class PlatformService {
+  constructor(private jwtService: JwtService) {}
 
   /* ══════════ خطط الاشتراك الجاهزة ══════════ */
 
@@ -82,6 +85,98 @@ export class PlatformService {
       usersUsed: t._count.employees,
       usersRemaining: t.maxUsers != null ? Math.max(0, t.maxUsers - t._count.employees) : null,
     }
+  }
+
+  /** انتحال شخصية أدمن الشركة — يصكّ توكن دخول تينانت عادي (نفس شكل تسجيل الدخول تماماً) لأول
+   * موظف بدور super_admin في الشركة، ليدخل مالك المنصة بكامل صلاحيات الإدارة عبر واجهة الشركة
+   * نفسها دون إعادة بناء أي شاشة CRUD — يتجاوز فقط قيود الأدوار، ولا يمسّ أي فحص سلامة بيانات */
+  async impersonateTenant(tenantId: string): Promise<AuthTokens & { adminName: string }> {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { enabledModules: true, planStatus: true },
+    })
+    if (!tenant) throw new NotFoundException('الشركة غير موجودة')
+
+    const admin = await prisma.employee.findFirst({
+      where: { tenantId, status: 'ACTIVE', employeeRoles: { some: { role: { name: 'super_admin' } } } },
+      include: { employeeRoles: { include: { role: true } } },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (!admin) throw new NotFoundException('لا يوجد موظف بدور super_admin في هذه الشركة لانتحال شخصيته')
+
+    const payload: JwtPayload = {
+      sub: admin.id,
+      tenantId,
+      email: admin.email ?? '',
+      roles: admin.employeeRoles.map(er => er.role.name),
+      modules: tenant.enabledModules,
+    }
+
+    await this.logPlatformAction(tenantId, 'TENANT_IMPERSONATE', admin.id, { adminName: admin.fullName, adminEmail: admin.email })
+
+    return {
+      accessToken: this.jwtService.sign(payload),
+      refreshToken: this.jwtService.sign(payload, {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
+      }),
+      adminName: admin.fullName,
+    }
+  }
+
+  /* ══════════ سجل تدقيق مالك المنصة — منفصل تماماً عن سجل تدقيق الشركة، لا يظهر لأي موظف بالشركة أبداً ══════════ */
+
+  private async logPlatformAction(tenantId: string, action: string, entityId?: string, details?: object) {
+    await prisma.platformAuditLog.create({ data: { tenantId, action, entityId, details: details as any } })
+  }
+
+  async listPlatformAuditForTenant(tenantId: string) {
+    return prisma.platformAuditLog.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } })
+  }
+
+  /* ══════════ طلبات إجازة الشركة — عرض وحذف من قِبل مالك المنصة فقط ══════════ */
+
+  async listTenantLeaveRequests(tenantId: string) {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
+    if (!tenant) throw new NotFoundException('الشركة غير موجودة')
+    // تُعرض هنا كل الطلبات حتى المخفية عن الشركة — مالك المنصة يحتفظ بالرؤية الكاملة دائماً
+    return prisma.leaveRequest.findMany({
+      where: { tenantId },
+      include: { employee: { select: { fullName: true, employeeCode: true } }, leaveType: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  /** "حذف" طلب إجازة من منظور الشركة — يُسمح فقط للطلبات المقبولة أو المعلّقة. لا حذف فعلي أبداً:
+   * السجل يُخفى فقط عن الشركة (hiddenFromTenant) ويبقى محفوظاً كاملاً في حساب مالك المنصة،
+   * وتُعاد الأيام المخصومة لرصيد الموظف إن كان الطلب مقبولاً حتى تنعكس حالة "عدم الوجود" في حسابات الشركة بدقة */
+  async deleteTenantLeaveRequest(tenantId: string, requestId: string) {
+    const req = await prisma.leaveRequest.findFirst({ where: { id: requestId, tenantId } })
+    if (!req) throw new NotFoundException('طلب الإجازة غير موجود')
+    if (req.hiddenFromTenant) throw new BadRequestException('هذا الطلب مخفي عن الشركة بالفعل')
+    if (req.status !== 'APPROVED' && req.status !== 'PENDING') {
+      throw new BadRequestException('لا يمكن حذف إلا الطلبات المقبولة أو المعلّقة')
+    }
+
+    if (req.status === 'APPROVED') {
+      const days = Math.ceil((req.endDate.getTime() - req.startDate.getTime()) / 86400000) + 1
+      const balance = await prisma.leaveBalance.findFirst({
+        where: { tenantId, employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, year: req.startDate.getFullYear() },
+      })
+      if (balance) {
+        await prisma.leaveBalance.update({
+          where: { id: balance.id },
+          data: { usedDays: Math.max(0, balance.usedDays - days) },
+        })
+      }
+    }
+
+    await prisma.leaveRequest.update({ where: { id: requestId }, data: { hiddenFromTenant: true } })
+    await this.logPlatformAction(tenantId, 'LEAVE_REQUEST_DELETE', requestId, {
+      employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, status: req.status,
+      startDate: req.startDate, endDate: req.endDate,
+    })
+    return { message: 'تم حذف طلب الإجازة من سجل الشركة (يبقى محفوظاً لمالك المنصة)' }
   }
 
   /** تعديل اسم الشركة و/أو الحد الأقصى لعدد المستخدمين */

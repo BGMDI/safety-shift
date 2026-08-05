@@ -386,7 +386,9 @@ interface PreviewData {
   startDate: string; days: number
   groups: { id: string; name: string; memberCount: number; pinned: { employeeId: string; employeeName: string; shiftId: string; shiftName: string }[] }[]
   matrix: { date: string; weekday: number; cells: (string | null)[] }[]
+  uncoveredActive: { employeeId: string; employeeName: string; employeeCode: string }[]
 }
+interface BlockedMember { employeeId: string; employeeName: string; planName: string }
 
 const SHIFT_COLORS = [
   'bg-blue-100 text-blue-700',
@@ -432,6 +434,7 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
   const [previewPlan, setPreviewPlan] = useState<string | null>(null)
   const [previewDays, setPreviewDays] = useState(14)
   const [applying, setApplying] = useState(false)
+  const [applyDays, setApplyDays] = useState(30)
 
   const shiftMap = useMemo(() => new Map(shifts.map(s => [s.id, s])), [shifts])
   const shiftColor = (id: string) => SHIFT_COLORS[shifts.findIndex(s => s.id === id) % SHIFT_COLORS.length]
@@ -485,11 +488,21 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
     load()
   }
 
+  const showBlocked = (blocked: BlockedMember[]) => {
+    if (!blocked?.length) return
+    alert(
+      `⚠️ لم تتم الإضافة — الموظفون التاليون أعضاء بالفعل في خطة تدوير أخرى، يجب حذفهم منها أولاً:\n\n` +
+      blocked.map(b => `• ${b.employeeName} — عضو في خطة "${b.planName}"`).join('\n')
+    )
+  }
+
   const addMember = async (groupId: string) => {
     const empId = memberPick[groupId]
     if (!empId) return
-    await api.post(`/rotations/groups/${groupId}/members`, { employeeIds: [empId], pinnedShiftId: pinPick[groupId] || undefined })
-      .catch((e: any) => alert(e.response?.data?.message ?? 'خطأ'))
+    try {
+      const r = await api.post(`/rotations/groups/${groupId}/members`, { employeeIds: [empId], pinnedShiftId: pinPick[groupId] || undefined })
+      showBlocked(r.data.blocked)
+    } catch (e: any) { alert(e.response?.data?.message ?? 'خطأ') }
     setMemberPick(p => ({ ...p, [groupId]: '' }))
     setPinPick(p => ({ ...p, [groupId]: '' }))
     load()
@@ -515,8 +528,10 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
   const distributeAll = async (plan: RotPlan) => {
     if (!employees.length) { alert('لا يوجد موظفون'); return }
     if (!confirm(`توزيع ${employees.length} موظف تلقائياً بالتساوي على ${plan.groups.length} مجموعات؟\nسيتم استبدال التوزيع الحالي.`)) return
-    await api.post(`/rotations/${plan.id}/distribute`, { employeeIds: employees.map(e => e.id) })
-      .catch((e: any) => alert(e.response?.data?.message ?? 'خطأ'))
+    try {
+      const r = await api.post(`/rotations/${plan.id}/distribute`, { employeeIds: employees.map(e => e.id) })
+      showBlocked(r.data.blocked)
+    } catch (e: any) { alert(e.response?.data?.message ?? 'خطأ') }
     load()
   }
 
@@ -531,10 +546,21 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
   const applyPlan = async (plan: RotPlan) => {
     const total = plan.groups.reduce((s, g) => s + g.members.length, 0)
     if (!total) { alert('أضف موظفين للمجموعات أولاً'); return }
-    if (!confirm(`تطبيق الجدول لمدة 30 يوماً على ${total} موظف؟\n\nسيتم استبدال تعيينات الشفتات الحالية لهؤلاء الموظفين في هذه الفترة، وسيُحسب التأخير في الحضور بناءً على الجدول الجديد.`)) return
+
+    let warning = ''
+    try {
+      const pv = await api.get(`/rotations/${plan.id}/preview?days=${applyDays}`)
+      const uncovered: PreviewData['uncoveredActive'] = pv.data.uncoveredActive ?? []
+      if (uncovered.length) {
+        warning = `\n\n⚠️ تنبيه: ${uncovered.length} موظف نشط غير منضم لهذه الخطة ولا توجد لديهم إجازة معتمدة خلال هذه الفترة، فلن يكون لديهم جدول:\n` +
+          uncovered.map(e => e.employeeName).join('، ')
+      }
+    } catch { /* لا تمنع التطبيق إن فشلت المعاينة */ }
+
+    if (!confirm(`تطبيق الجدول لمدة ${applyDays} يوماً على ${total} موظف؟\n\nسيتم استبدال تعيينات الشفتات الحالية لهؤلاء الموظفين في هذه الفترة، وسيُحسب التأخير في الحضور بناءً على الجدول الجديد.${warning}`)) return
     setApplying(true)
     try {
-      const r = await api.post(`/rotations/${plan.id}/apply`, { days: 30 })
+      const r = await api.post(`/rotations/${plan.id}/apply`, { days: applyDays })
       alert(`✓ تم تطبيق الجدول\nالفترة: ${r.data.from} → ${r.data.to}\nالموظفون: ${r.data.employees} · التعيينات: ${r.data.applied}`)
     } catch (e: any) { alert(e.response?.data?.message ?? 'حدث خطأ') }
     finally { setApplying(false) }
@@ -767,9 +793,15 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
                     className="bg-blue-50 text-blue-700 text-xs px-3 py-2 rounded-lg hover:bg-blue-100 transition">
                     👁️ معاينة الجدول
                   </button>
+                  <select value={applyDays} onChange={e => setApplyDays(Number(e.target.value))}
+                    className="border rounded-lg px-2 py-2 text-xs bg-white text-gray-600">
+                    <option value={7}>7 أيام</option>
+                    <option value={14}>14 يوماً</option>
+                    <option value={30}>30 يوماً</option>
+                  </select>
                   <button onClick={() => applyPlan(plan)} disabled={applying}
                     className="bg-green-600 text-white text-xs px-3 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition">
-                    {applying ? '⏳...' : '✓ تطبيق الجدول (30 يوم)'}
+                    {applying ? '⏳...' : `✓ تطبيق الجدول (${applyDays} يوم)`}
                   </button>
                   <div className="flex-1" />
                   <button onClick={() => deletePlan(plan)}
@@ -848,6 +880,20 @@ function RotationTab({ shifts, employees, branches }: { shifts: Shift[]; employe
                         </button>
                       ))}
                     </div>
+                    {preview.uncoveredActive.length > 0 && (
+                      <div className="px-4 py-3 border-b bg-red-50/60">
+                        <p className="text-xs font-semibold text-red-700 mb-1.5">
+                          ⚠️ {preview.uncoveredActive.length} موظف نشط لن يكون لديهم جدول خلال هذه الفترة (غير منضمين للخطة وليسوا في إجازة معتمدة)
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {preview.uncoveredActive.map(e => (
+                            <span key={e.employeeId} className="text-xs bg-white border border-red-200 text-red-700 rounded-lg px-2 py-1">
+                              {e.employeeName}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead className="bg-gray-50 border-b">

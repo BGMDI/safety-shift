@@ -37,12 +37,23 @@ export class PlatformController {
   /* ── الشركات ── */
   @Get('tenants') listTenants() { return this.svc.listTenants() }
   @Get('tenants/:id') getTenant(@Param('id') id: string) { return this.svc.getTenant(id) }
+  /** يصكّ توكن دخول تينانت عادي لأدمن الشركة — يفتح لوحة الشركة الكاملة بكل الصلاحيات دون كلمة مرور */
+  @Post('tenants/:id/impersonate') impersonate(@Param('id') id: string) { return this.svc.impersonateTenant(id) }
   @Post('tenants') createTenant(@Body() dto: CreateTenantDto) { return this.svc.createTenant(dto) }
   @Put('tenants/:id') updateInfo(@Param('id') id: string, @Body() dto: UpdateTenantInfoDto) { return this.svc.updateTenantInfo(id, dto) }
   @Put('tenants/:id/modules') updateModules(@Param('id') id: string, @Body() dto: UpdateTenantModulesDto) { return this.svc.updateTenantModules(id, dto) }
   @Put('tenants/:id/extend') extend(@Param('id') id: string, @Body() dto: ExtendSubscriptionDto) { return this.svc.extendSubscription(id, dto) }
   @Put('tenants/:id/suspend') suspend(@Param('id') id: string) { return this.svc.suspendTenant(id) }
   @Put('tenants/:id/reactivate') reactivate(@Param('id') id: string) { return this.svc.reactivateTenant(id) }
+
+  /* ── طلبات إجازة الشركة — عرض وحذف حصراً من لوحة مالك المنصة ── */
+  @Get('tenants/:id/leave-requests') listLeaveRequests(@Param('id') id: string) { return this.svc.listTenantLeaveRequests(id) }
+  @Delete('tenants/:id/leave-requests/:requestId') deleteLeaveRequest(
+    @Param('id') id: string, @Param('requestId') requestId: string,
+  ) { return this.svc.deleteTenantLeaveRequest(id, requestId) }
+
+  /* ── سجل تدقيق مالك المنصة لهذه الشركة — منفصل تماماً عن سجل تدقيق الشركة نفسها ── */
+  @Get('tenants/:id/platform-audit') listPlatformAudit(@Param('id') id: string) { return this.svc.listPlatformAuditForTenant(id) }
 
   @Post('tenants/:id/logo')
   @UseInterceptors(FileInterceptor('logo', {

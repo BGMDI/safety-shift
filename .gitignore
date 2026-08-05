@@ -6,3 +6,9 @@ dist
 *.log
 .turbo
 .DS_Store
+
+# مخرجات بناء TypeScript
+*.tsbuildinfo
+
+# ملفات يرفعها المستخدمون وقت التشغيل (صور الموظفين وشعارات الشركات) — بيانات لا كود
+uploads/

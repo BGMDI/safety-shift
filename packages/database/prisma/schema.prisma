@@ -77,6 +77,19 @@ model PlatformAdmin {
   @@map("platform_admins")
 }
 
+/// سجل تدقيق خاص بمالك المنصة فقط — كل إجراء يُجريه على بيانات أي شركة (حذف، دخول بصلاحيات الأدمن...)
+/// يُسجَّل هنا حصراً، ولا يظهر إطلاقاً في سجل تدقيق الشركة نفسها
+model PlatformAuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  action     String   // مثال: LEAVE_REQUEST_DELETE, TENANT_IMPERSONATE
+  entityId   String?
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@map("platform_audit_logs")
+}
+
 /// كل قسم/ميزة يمكن تفعيلها أو تعطيلها لشركة معيّنة — الموظفون والهيكل التنظيمي دائماً متاحان بلا حاجة للإدراج هنا
 enum SystemModule {
   ATTENDANCE
@@ -336,6 +349,8 @@ model LeaveRequest {
   approvedBy  String?
   notes       String?
   createdAt   DateTime      @default(now())
+  // حذف مالك المنصة لا يمسح السجل فعلياً — يُخفى فقط عن الشركة ويبقى محفوظاً لمالك المنصة
+  hiddenFromTenant Boolean  @default(false)
 
   employee    Employee  @relation(fields: [employeeId], references: [id])
   leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])

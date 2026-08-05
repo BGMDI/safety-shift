@@ -67,6 +67,16 @@ export class LeavesController {
     return this.svc.setLeaveBalance(u.tenantId, dto)
   }
 
+  @Delete('balances/:id') @Roles('super_admin', 'hr_manager')
+  deleteBalance(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.svc.deleteLeaveBalance(u.tenantId, id)
+  }
+
+  @Delete('types/:id/balances') @Roles('super_admin', 'hr_manager')
+  deleteBalancesByType(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.svc.deleteBalancesByType(u.tenantId, id)
+  }
+
   // ── طلبات الإجازات — الموظف العادي يرى طلباته فقط ──
   @Get('requests')
   getRequests(
