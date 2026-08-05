@@ -177,10 +177,10 @@ export default function PlatformTenantsPage() {
   }
 
   const impersonate = async (id: string, name: string) => {
-    if (!confirm(`الدخول كإدارة شركة "${name}"؟ سيُفتح لوحة تحكم الشركة بكامل صلاحيات المدير في تبويب جديد.`)) return
+    if (!confirm(`الدخول كإدارة شركة "${name}"؟\n\nستُفتح لوحة تحكم الشركة بكامل صلاحيات المدير في تبويب جديد، وتنتهي الجلسة تلقائياً بعد 15 دقيقة بلا تمديد.`)) return
     try {
       const r = await platformApi.post(`/platform/tenants/${id}/impersonate`)
-      const url = `${window.location.origin}/impersonate?t=${encodeURIComponent(r.data.accessToken)}&r=${encodeURIComponent(r.data.refreshToken)}`
+      const url = `${window.location.origin}/impersonate?t=${encodeURIComponent(r.data.accessToken)}`
       window.open(url, '_blank')
       loadPlatformAudit(id)
     } catch (e: any) { alert(e.response?.data?.message ?? 'خطأ') }

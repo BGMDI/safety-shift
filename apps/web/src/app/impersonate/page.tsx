@@ -11,10 +11,10 @@ function ImpersonateInner() {
 
   useEffect(() => {
     const token = params.get('t')
-    const refresh = params.get('r')
-    if (!token || !refresh) { setError('رابط دخول غير صالح'); return }
+    if (!token) { setError('رابط دخول غير صالح'); return }
     localStorage.setItem('access_token', token)
-    localStorage.setItem('refresh_token', refresh)
+    // جلسة انتحال قصيرة بلا تمديد — أزل أي refresh_token سابق حتى لا تُمدَّد الجلسة عند انتهائها
+    localStorage.removeItem('refresh_token')
     window.history.replaceState(null, '', '/impersonate') // إزالة التوكن من شريط العنوان وسجل التصفح
     router.replace(isManager() ? '/dashboard' : '/me')
   }, [params, router])

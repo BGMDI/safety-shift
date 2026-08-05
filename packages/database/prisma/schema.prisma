@@ -624,6 +624,9 @@ model Role {
   employeeRoles EmployeeRole[]
   approvalSteps ApprovalStep[]
 
+  // الكود يقارن باسم الدور نصياً (مثل 'super_admin')، فتكرار الاسم داخل الشركة
+  // يجعل الصلاحيات غير حتمية — القيد يمنع ذلك عند مستوى قاعدة البيانات
+  @@unique([tenantId, name])
   @@map("roles")
 }
 

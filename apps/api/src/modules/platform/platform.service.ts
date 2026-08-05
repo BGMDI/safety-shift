@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import * as bcrypt from 'bcrypt'
 import { JwtService } from '@nestjs/jwt'
 import { prisma } from '@shift-saas/database'
-import { JwtPayload, AuthTokens } from '@shift-saas/types'
+import { JwtPayload } from '@shift-saas/types'
 import {
   CreateTemplateDto, UpdateTemplateDto,
   CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto, UpdateTenantInfoDto,
@@ -10,6 +10,8 @@ import {
 
 const CYCLE_DAYS: Record<string, number> = { MONTHLY: 30, QUARTERLY: 90, ANNUAL: 365 }
 const DEFAULT_ROLES = ['super_admin', 'hr_manager', 'supervisor', 'employee']
+/** عمر جلسة انتحال شخصية أدمن الشركة — قصير عمداً وغير قابل للتمديد (بلا refreshToken) */
+const IMPERSONATION_TTL = '15m'
 
 @Injectable()
 export class PlatformService {
@@ -87,10 +89,14 @@ export class PlatformService {
     }
   }
 
-  /** انتحال شخصية أدمن الشركة — يصكّ توكن دخول تينانت عادي (نفس شكل تسجيل الدخول تماماً) لأول
-   * موظف بدور super_admin في الشركة، ليدخل مالك المنصة بكامل صلاحيات الإدارة عبر واجهة الشركة
-   * نفسها دون إعادة بناء أي شاشة CRUD — يتجاوز فقط قيود الأدوار، ولا يمسّ أي فحص سلامة بيانات */
-  async impersonateTenant(tenantId: string): Promise<AuthTokens & { adminName: string }> {
+  /** انتحال شخصية أدمن الشركة — يصكّ توكن دخول تينانت لأول موظف بدور super_admin في الشركة،
+   * ليدخل مالك المنصة بكامل صلاحيات الإدارة عبر واجهة الشركة نفسها دون إعادة بناء أي شاشة CRUD.
+   *
+   * قيود أمنية مقصودة تميّزه عن تسجيل الدخول العادي:
+   *  - جلسة قصيرة تنتهي وحدها (IMPERSONATION_TTL) ولا تُمدَّد
+   *  - بلا refreshToken إطلاقاً — لا يمكن تمديد الجلسة أياماً بلا رجوع للوحة المنصة
+   *  - يحمل impersonatedBy لتمييزه عن دخول حقيقي وإسناد أي إجراء لمالك المنصة */
+  async impersonateTenant(tenantId: string, platformAdminId: string): Promise<{ accessToken: string; expiresIn: string; adminName: string }> {
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { enabledModules: true, planStatus: true },
@@ -104,22 +110,22 @@ export class PlatformService {
     })
     if (!admin) throw new NotFoundException('لا يوجد موظف بدور super_admin في هذه الشركة لانتحال شخصيته')
 
-    const payload: JwtPayload = {
+    const payload: JwtPayload & { impersonatedBy: string } = {
       sub: admin.id,
       tenantId,
       email: admin.email ?? '',
       roles: admin.employeeRoles.map(er => er.role.name),
       modules: tenant.enabledModules,
+      impersonatedBy: platformAdminId,
     }
 
-    await this.logPlatformAction(tenantId, 'TENANT_IMPERSONATE', admin.id, { adminName: admin.fullName, adminEmail: admin.email })
+    await this.logPlatformAction(tenantId, 'TENANT_IMPERSONATE', admin.id, {
+      adminName: admin.fullName, adminEmail: admin.email, platformAdminId,
+    })
 
     return {
-      accessToken: this.jwtService.sign(payload),
-      refreshToken: this.jwtService.sign(payload, {
-        secret: process.env.JWT_REFRESH_SECRET,
-        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
-      }),
+      accessToken: this.jwtService.sign(payload, { expiresIn: IMPERSONATION_TTL }),
+      expiresIn: IMPERSONATION_TTL,
       adminName: admin.fullName,
     }
   }

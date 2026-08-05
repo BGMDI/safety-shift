@@ -333,7 +333,7 @@ model OnboardingRequest {
 ### 4.9 الصلاحيات والتدقيق
 
 ```prisma
-model Role         { id, tenantId, name }              // صف لكل شركة، ليس enum
+model Role         { id, tenantId, name  @@unique([tenantId, name]) }  // صف لكل شركة، ليس enum
 model Permission   { id, roleId, module, action }
 model EmployeeRole { id, employeeId, roleId  @@unique([employeeId, roleId]) }
 
@@ -410,6 +410,8 @@ interface PlatformJwtPayload {   // بلا tenantId إطلاقاً
   sub: string  email: string  fullName: string
 }
 ```
+
+**مطالبة إضافية اختيارية:** توكن الانتحال (§7.8) يحمل `impersonatedBy: string` فوق `JwtPayload` — يميّز الجلسة عن تسجيل دخول حقيقي. الحُرّاس تتجاهله، لكنه متاح لأي منطق يحتاج نسب الإجراء لمالك المنصة.
 
 ### 5.3 مستويات الأدوار
 
@@ -844,28 +846,43 @@ ONCE_PER_EMPLOYMENT  → where: { status: 'APPROVED', hiddenFromTenant: false }
 
 ### 7.8 انتحال شخصية أدمن الشركة
 
-بدل بناء شاشات CRUD مكرّرة لمالك المنصة، يصكّ النظام **توكن دخول تينانت عادياً** لأدمن الشركة:
+بدل بناء شاشات CRUD مكرّرة لمالك المنصة، يصكّ النظام **توكن دخول تينانت** لأدمن الشركة:
 
 ```ts
-impersonateTenant(tenantId) {
+const IMPERSONATION_TTL = '15m'
+
+impersonateTenant(tenantId, platformAdminId) {
   const admin = employee.findFirst({
     where: { tenantId, status: 'ACTIVE',
              employeeRoles: { some: { role: { name: 'super_admin' } } } },
     orderBy: { createdAt: 'asc' },
   })
-  const payload: JwtPayload = {
+  const payload: JwtPayload & { impersonatedBy: string } = {
     sub: admin.id, tenantId, email: admin.email ?? '',
     roles: admin.employeeRoles.map(er => er.role.name),
     modules: tenant.enabledModules,
+    impersonatedBy: platformAdminId,        // يميّزه عن تسجيل دخول حقيقي
   }
-  logPlatformAction(tenantId, 'TENANT_IMPERSONATE', admin.id, {...})
-  return { accessToken: sign(payload, JWT_SECRET), refreshToken: sign(payload, JWT_REFRESH_SECRET) }
+  logPlatformAction(tenantId, 'TENANT_IMPERSONATE', admin.id, { platformAdminId, ... })
+
+  // بلا refreshToken إطلاقاً — الجلسة تنتهي وحدها ولا تُمدَّد
+  return { accessToken: sign(payload, { expiresIn: IMPERSONATION_TTL }), expiresIn: IMPERSONATION_TTL }
 }
 ```
 
-**تدفق الواجهة:** زر في لوحة المنصة ⇒ `window.open('/impersonate?t=...&r=...')` ⇒ صفحة جسر تخزّن التوكنين وتمسح الرابط بـ `history.replaceState` ⇒ تحويل للوحة التحكم.
+**قيود أمنية مقصودة تميّزه عن تسجيل الدخول العادي:**
 
-> ⚠️ يمنح **أدمن كامل لأي شركة بضغطة واحدة بلا كلمة مرور**. مُسجَّل في سجل مالك المنصة، لكن **بلا حد زمني ولا تنبيه للشركة**.
+| القيد | السبب |
+|---|---|
+| **بلا `refreshToken`** | لا يمكن تمديد الجلسة أياماً بلا رجوع للوحة المنصة |
+| **عمر 15 دقيقة** | نافذة تعرّض ضيّقة، تنتهي وحدها |
+| **`impersonatedBy` في الحمولة** | يميّز الجلسة عن دخول حقيقي وينسبها لمالك المنصة |
+
+**تدفق الواجهة:** زر في لوحة المنصة ⇒ `window.open('/impersonate?t=...')` ⇒ صفحة جسر تخزّن التوكن، **تمسح أي `refresh_token` سابق** (حتى لا تُمدَّد الجلسة)، وتنظّف الرابط بـ `history.replaceState` ⇒ تحويل للوحة التحكم.
+
+عند انتهاء الـ15 دقيقة يفشل أول طلب بـ401، ويحاول `api.ts` التجديد فلا يجد `refresh_token` ⇒ يمسح الجلسة ويحوّل لتسجيل الدخول. تدهور آمن بلا تعليق.
+
+> ⚠️ **يبقى قوياً:** يمنح أدمن كامل لأي شركة بضغطة واحدة بلا كلمة مرور. مُسجَّل في سجل مالك المنصة، لكن **لا يزال بلا إبطال فوري للجلسة الجارية ولا تنبيه للشركة** — انظر §11.2.
 
 ---
 
@@ -1064,24 +1081,29 @@ model EmployeeShift {
 ```
 عندها يصبح التطبيق قادراً على استبدال تعيينات خطته فقط، وعرض تعارض صريح بدل الكتابة فوق عمل خطة أخرى.
 
-### 11.2 توكن الانتحال واسع الصلاحية وطويل العمر 🔴
+### 11.2 توكن الانتحال — 🟡 مُعالَج جزئياً
 
-**الدليل:** `impersonateTenant()` تُصدر `accessToken` (15 دقيقة) **و`refreshToken` (7 أيام)** بنفس شكل تسجيل الدخول العادي تماماً — بلا أي تمييز.
+**✅ ما عولج** (مُطبَّق ومُتحقَّق منه):
 
-**الأثر:**
-- التوكن **لا يُميَّز** عن تسجيل دخول حقيقي ⇒ أي إجراء يُنفَّذ داخل الجلسة يُنسب لأدمن الشركة في `AuditLog`، لا لمالك المنصة.
-- الـ `refreshToken` يمدّد الجلسة **7 أيام** بلا رجوع للوحة المنصة.
-- **لا إبطال** — لا يمكن قطع جلسة انتحال جارية.
+| القيد | التحقق |
+|---|---|
+| حذف `refreshToken` نهائياً | حقول الاستجابة: `accessToken · expiresIn · adminName` — لا `refreshToken` |
+| عمر ثابت 15 دقيقة غير قابل للتمديد | `exp - iat = 15` دقيقة |
+| `impersonatedBy` في الحمولة | يطابق `sub` مالك المنصة |
+| تسجيل `platformAdminId` في سجل المنصة | مسجَّل في `details` |
+| مسح `refresh_token` سابق في صفحة الجسر | يمنع تمديد الجلسة عند انتهائها |
+
+**🔴 ما تبقّى:**
+- **لا إبطال فوري** — لا يمكن قطع جلسة انتحال جارية قبل انتهاء الـ15 دقيقة.
 - **لا تنبيه للشركة** بأن أحداً دخل بصلاحيات أدمنها.
+- **`impersonatedBy` لا يُستهلَك بعد** — الحقل موجود في التوكن لكن لا شيء يقرأه. أي كتابة داخل الجلسة ما زالت تُنسب لأدمن الشركة في `AuditLog`، لا لمالك المنصة.
 
-**التوصية:**
+**الخطوات المتبقية:**
 ```ts
-// 1. لا refreshToken إطلاقاً — جلسة قصيرة تنتهي وحدها
-accessToken: sign({ ...payload, impersonatedBy: platformAdminId }, { expiresIn: '15m' })
-
-// 2. حقل مميِّز في الحمولة ⇒ كل كتابة تُنسب لمالك المنصة في سجل الشركة
-// 3. شارة دائمة في الواجهة: "أنت تتصفّح كمالك منصة — الشركة: س"
-// 4. إشعار الشركة (بريد/تنبيه) بحدوث الانتحال
+// 1. اقرأ impersonatedBy في AuditInterceptor وانسب الإجراء لمالك المنصة
+// 2. شارة دائمة في الواجهة: "أنت تتصفّح كمالك منصة — الشركة: س"
+// 3. جدول ImpersonationSession قابل للإبطال (بدل الاعتماد على انتهاء التوكن وحده)
+// 4. إشعار الشركة بحدوث الانتحال
 ```
 
 ### 11.3 `RolesGuard` مقلوب المنطق 🔴
@@ -1133,20 +1155,22 @@ export class AuditInterceptor implements NestInterceptor {
 }
 ```
 
-### 11.6 `Role.name` نص حر بلا قيد تفرّد 🟠
+### 11.6 `Role.name` بلا قيد تفرّد — ✅ عولج
 
-**الدليل:** `model Role { id, tenantId, name }` — **لا `@@unique([tenantId, name])`** (تحققت: الجدول يحوي `@@map` فقط).
+**كان:** `model Role { id, tenantId, name }` بلا أي قيد — لا شيء يمنع صفَّي `super_admin` في نفس الشركة، والكود يقارن بالنص الحرفي (`role.name === 'super_admin'`) ⇒ الخطأ يظهر كفقدان صلاحيات غامض لا كخطأ صريح.
 
-**الأثر:** لا شيء يمنع صفَّي `super_admin` في نفس الشركة، أو خطأً إملائياً (`super-admin`). والكود يقارن بالنص الحرفي في مواضع عدة (`role.name === 'super_admin'`) ⇒ الخطأ يظهر كفقدان صلاحيات غامض لا كخطأ صريح.
-
-**التوصية:**
+**الإصلاح المُطبَّق:**
 ```prisma
 model Role {
-  name String
-  @@unique([tenantId, name])   // يمنع التكرار
+  // ...
+  @@unique([tenantId, name])
 }
 ```
-مع ثابت مشترك في `packages/types` بدل النصوص المتناثرة:
+migration: `20260805110000_role_unique_name_per_tenant`
+
+**التحقق:** فُحصت البيانات القائمة أولاً (**0 تكرار** في 8 صفوف) قبل تطبيق القيد، ثم جرت محاولة إنشاء دور `super_admin` مكرر ⇒ **رُفضت بـ`P2002`**.
+
+**🟡 ما تبقّى:** أسماء الأدوار ما زالت نصوصاً متناثرة في الكود. يُستحسن ثابت مشترك في `packages/types`:
 ```ts
 export const SYSTEM_ROLES = { SUPER_ADMIN: 'super_admin', HR: 'hr_manager', ... } as const
 ```
@@ -1165,15 +1189,15 @@ export const SYSTEM_ROLES = { SUPER_ADMIN: 'super_admin', HR: 'hr_manager', ... 
 
 ### 11.8 ملخص الأولويات
 
-| # | النقطة | الخطورة | الجهد | افعلها إن... |
+| # | النقطة | الخطورة | الجهد | الحالة |
 |---|---|---|---|---|
-| 11.3 | `RolesGuard` مقلوب | 🔴 أمني | متوسط | **دائماً** — تسريب صامت |
-| 11.2 | توكن الانتحال | 🔴 أمني | منخفض | **دائماً** — صلاحية بلا إبطال |
-| 11.1 | `EmployeeShift` بلا `planId` | 🔴 سلامة بيانات | منخفض | تستخدم أكثر من خطة تدوير |
-| 11.5 | `AuditLog` معطّل | 🟠 امتثال | متوسط | التدقيق مطلب تعاقدي |
-| 11.4 | الحذف الناعم يدوي | 🟠 سلامة بيانات | متوسط | ستعمّم "لا حذف" على جداول أخرى |
-| 11.6 | `Role` بلا تفرّد | 🟠 صحة | منخفض جداً | **دائماً** — سطر واحد |
-| 11.7 | البريد فريد عالمياً | 🟡 وظيفي | مرتفع | تحتاج تعدد الانتماء |
+| 11.3 | `RolesGuard` مقلوب | 🔴 أمني | متوسط | **مفتوح** — تسريب صامت، أعلى أولوية |
+| 11.1 | `EmployeeShift` بلا `planId` | 🔴 سلامة بيانات | منخفض | **مفتوح** — مهم إن استُخدمت أكثر من خطة |
+| 11.5 | `AuditLog` معطّل | 🟠 امتثال | متوسط | **مفتوح** — وحدة واحدة من 21 تكتب فيه |
+| 11.4 | الحذف الناعم يدوي | 🟠 سلامة بيانات | متوسط | **مفتوح** — يلزم قبل تعميم "لا حذف" |
+| 11.2 | توكن الانتحال | 🔴 أمني | منخفض | 🟡 **عولج جزئياً** — بقي الإبطال والإسناد |
+| 11.6 | `Role` بلا تفرّد | 🟠 صحة | منخفض جداً | ✅ **عولج** |
+| 11.7 | البريد فريد عالمياً | 🟡 وظيفي | مرتفع | مفتوح — قرار تصميمي لا خلل |
 
 ---
 
