@@ -689,7 +689,11 @@ model AuditLog {
   newData    Json?
   ipAddress  String?
   createdAt  DateTime @default(now())
+  // معرّف مالك المنصة إن نُفِّذ الإجراء داخل جلسة انتحال — بدونه يبدو الإجراء
+  // وكأن أدمن الشركة نفسه قام به (مصدره مطالبة impersonatedBy في التوكن)
+  impersonatedBy String?
 
+  @@index([tenantId, createdAt])
   @@map("audit_logs")
 }
 

@@ -5,6 +5,7 @@ import { RolesGuard } from '../../common/guards/roles.guard'
 import { ModuleGuard } from '../../common/guards/module.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { AnyEmployee } from '../../common/decorators/any-employee.decorator'
+import { SkipAudit } from '../../common/decorators/skip-audit.decorator'
 import { RequiresModule } from '../../common/decorators/requires-module.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { AttendanceService } from './attendance.service'
@@ -91,8 +92,8 @@ export class AttendanceController {
     return this.svc.logAttendance(u.tenantId, body)
   }
 
-  /* تعديل سجل — يُؤرشف قبل/بعد في التدقيق */
-  @Put(':id') @Roles('super_admin', 'hr_manager', 'supervisor')
+  /* تعديل سجل — يُؤرشف قبل/بعد في التدقيق (تسجيل يدوي أغنى، فيُستثنى من التلقائي) */
+  @Put(':id') @Roles('super_admin', 'hr_manager', 'supervisor') @SkipAudit()
   update(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
@@ -101,7 +102,7 @@ export class AttendanceController {
     return this.svc.updateLog(u.tenantId, id, body, u.sub)
   }
 
-  @Delete(':id') @Roles('super_admin', 'hr_manager')
+  @Delete(':id') @Roles('super_admin', 'hr_manager') @SkipAudit()
   remove(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     return this.svc.deleteLog(u.tenantId, id, u.sub)
   }
