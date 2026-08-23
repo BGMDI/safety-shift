@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { AuditInterceptor } from './common/interceptors/audit.interceptor'
+import { HealthController } from './modules/health/health.controller'
 import { AuthModule } from './modules/auth/auth.module'
 import { BranchesModule } from './modules/branches/branches.module'
 import { EmployeesModule } from './modules/employees/employees.module'
@@ -49,6 +50,7 @@ import { PlatformModule } from './modules/platform/platform.module'
     PlatformAuthModule,
     PlatformModule,
   ],
+  controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // تسجيل تلقائي لكل تعديل بيانات في سجل تدقيق الشركة
