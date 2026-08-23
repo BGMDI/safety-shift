@@ -1,0 +1,166 @@
+/* ──────────────────────────────────────────────────────────────
+   اتجاه تصميمي جديد — محصور داخل .dp2 فلا يمسّ أي صفحة قائمة.
+   الفكرة: مادة هذا المنتج هي الوقت. تُفتتح اللوحة بشريط اليوم لا بصفّ أرقام،
+   واللوحة اللونية مشتقة من دورة اليوم: صباح ذهبي، مساء مرجاني، ليل نيلي.
+
+   مقياس الطباعة مبنيّ للعربية: القاعدة 15.5px وأصغر مقاس 12.5px،
+   لأن الحروف العربية المتصلة ونقاطها تحتاج حجماً أكبر من اللاتينية لنفس الوضوح.
+   كل درجات النص تتجاوز 4.5:1 تبايناً (WCAG AA).
+   ────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap');
+
+.dp2 {
+  /* الحبر والأسطح */
+  --ink: #17203d;          /* نيلي عميق — بديل الأسود */
+  --ink-2: #414c73;        /* 9.1:1 */
+  --ink-3: #5c6689;        /* 5.6:1 — كان #8b93ad عند 3.05:1 (راسب) */
+  --canvas: #f2f5fb;
+  --paper: #ffffff;
+  --line: #dfe4f0;
+
+  /* دورة اليوم — ألوان الورديات (كتل ومؤشرات، لا نصوص) */
+  --morning: #d99626;
+  --evening: #d4694e;
+  --night: #46589f;
+
+  /* الحالة — درجات النص مُعمّقة لتجتاز التباين على خلفياتها الفاتحة */
+  --ok: #0a6f62;    --ok-soft: #e0f2ef;
+  --warn: #8a5c0d;  --warn-soft: #fbf0dc;
+  --crit: #a33d2b;  --crit-soft: #fbe9e6;
+
+  /* مقياس الطباعة */
+  --fs-xs: 12.5px;
+  --fs-sm: 13.5px;
+  --fs-md: 15.5px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-2xl: 27px;
+
+  --r-card: 10px;
+  --r-ctl: 8px;
+
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  min-height: 100vh;
+  font-size: var(--fs-md);
+  line-height: 1.65;
+}
+
+.dp2 *, .dp2 *::before, .dp2 *::after { box-sizing: border-box; }
+.dp2 h1, .dp2 h2, .dp2 h3 { font-family: 'Rubik', 'IBM Plex Sans Arabic', sans-serif; margin: 0; letter-spacing: -0.01em; }
+.dp2 :focus-visible { outline: 2px solid var(--ok); outline-offset: 2px; border-radius: 4px; }
+.dp2 .num { font-variant-numeric: tabular-nums; }
+
+/* ── الهيكل ── */
+.dp2-shell { display: flex; min-height: 100vh; }
+
+/* ── الشريط الجانبي ── */
+.dp2-rail {
+  width: 252px; flex: 0 0 252px; background: var(--ink); color: #fff;
+  padding: 22px 15px; display: flex; flex-direction: column; gap: 26px;
+}
+.dp2-brand { display: flex; align-items: center; gap: 11px; padding: 0 6px; }
+.dp2-brand-mark {
+  width: 38px; height: 38px; border-radius: 10px; flex: 0 0 38px;
+  background: linear-gradient(140deg, var(--morning), var(--evening) 55%, var(--night));
+  display: grid; place-items: center; font-family: 'Rubik', sans-serif; font-weight: 700; color: #fff; font-size: var(--fs-lg);
+}
+.dp2-brand-name { font-family: 'Rubik', sans-serif; font-weight: 600; font-size: var(--fs-md); }
+.dp2-brand-sub { color: #b4bcda; font-size: var(--fs-xs); }
+
+.dp2-navgroup { display: flex; flex-direction: column; gap: 3px; }
+.dp2-navlabel { color: #98a2c8; font-size: var(--fs-xs); letter-spacing: .04em; padding: 0 9px 7px; }
+.dp2-nav {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 9px 11px; border-radius: var(--r-ctl); border: 0; cursor: pointer;
+  background: transparent; color: #d5dbf0; font: inherit; font-size: var(--fs-sm); text-align: right;
+}
+.dp2-nav:hover { background: rgba(255,255,255,.08); color: #fff; }
+.dp2-nav[aria-current='page'] { background: rgba(255,255,255,.14); color: #fff; font-weight: 600; }
+.dp2-nav-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; opacity: .5; flex: 0 0 6px; }
+.dp2-nav[aria-current='page'] .dp2-nav-dot { background: var(--morning); opacity: 1; }
+
+.dp2-me { margin-top: auto; display: flex; align-items: center; gap: 11px; padding: 12px 8px 0; border-top: 1px solid rgba(255,255,255,.13); }
+.dp2-avatar { width: 34px; height: 34px; border-radius: 999px; background: #2e3a63; display: grid; place-items: center; font-size: var(--fs-sm); font-weight: 600; flex: 0 0 34px; }
+.dp2-me-name { font-size: var(--fs-sm); font-weight: 600; }
+.dp2-me-role { font-size: var(--fs-xs); color: #b4bcda; }
+
+/* ── المحتوى ── */
+.dp2-main { flex: 1; padding: 28px 32px 48px; min-width: 0; }
+.dp2-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+.dp2-title { font-size: var(--fs-2xl); font-weight: 600; }
+.dp2-sub { color: var(--ink-3); font-size: var(--fs-sm); margin-top: 3px; }
+
+/* ── التوقيع: شريط اليوم ── */
+.dp2-band-card {
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-card);
+  padding: 20px 22px 16px; margin-bottom: 20px;
+}
+.dp2-band-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.dp2-band-title { font-size: var(--fs-md); font-weight: 600; }
+.dp2-band-note { color: var(--ink-3); font-size: var(--fs-xs); }
+
+.dp2-band { position: relative; display: flex; gap: 4px; }
+.dp2-seg { position: relative; border-radius: 8px; overflow: hidden; background: var(--canvas); padding: 13px 14px 14px; min-width: 0; }
+.dp2-seg-fill { position: absolute; inset: 0 auto 0 0; opacity: .22; }
+.dp2-seg-inner { position: relative; }
+.dp2-seg-name { font-weight: 600; font-size: var(--fs-md); display: flex; align-items: center; gap: 7px; }
+.dp2-seg-swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 10px; }
+.dp2-seg-hours { color: var(--ink-3); font-size: var(--fs-xs); margin-top: 2px; }
+.dp2-seg-count { margin-top: 10px; font-size: var(--fs-xl); font-weight: 600; }
+.dp2-seg-count span { font-size: var(--fs-sm); font-weight: 400; color: var(--ink-3); }
+
+.dp2-now { position: absolute; top: -8px; bottom: -8px; width: 2px; background: var(--ink); border-radius: 2px; }
+.dp2-now::before {
+  content: 'الآن'; position: absolute; top: -21px; right: 50%; transform: translateX(50%);
+  background: var(--ink); color: #fff; font-size: var(--fs-xs); padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+}
+
+/* ── الشبكة السفلية ── */
+.dp2-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; align-items: start; }
+.dp2-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
+.dp2-card-head { padding: 15px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.dp2-card-title { font-size: var(--fs-md); font-weight: 600; }
+.dp2-card-note { color: var(--ink-3); font-size: var(--fs-xs); }
+
+.dp2-branch { padding: 15px 20px; border-bottom: 1px solid var(--line); }
+.dp2-branch:last-child { border-bottom: 0; }
+.dp2-branch-name { font-weight: 600; font-size: var(--fs-sm); margin-bottom: 11px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dp2-mini { display: flex; align-items: center; gap: 11px; margin-bottom: 8px; }
+.dp2-mini:last-child { margin-bottom: 0; }
+.dp2-mini-name { width: 66px; flex: 0 0 66px; font-size: var(--fs-sm); color: var(--ink-2); }
+.dp2-track { flex: 1; height: 8px; border-radius: 999px; background: var(--canvas); overflow: hidden; }
+.dp2-track-fill { height: 100%; border-radius: 999px; }
+.dp2-mini-val { width: 68px; flex: 0 0 68px; text-align: left; font-size: var(--fs-sm); color: var(--ink-2); }
+
+.dp2-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 11px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 500; }
+.dp2-pill-ok { background: var(--ok-soft); color: var(--ok); }
+.dp2-pill-warn { background: var(--warn-soft); color: var(--warn); }
+.dp2-pill-crit { background: var(--crit-soft); color: var(--crit); }
+
+.dp2-task { padding: 13px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; }
+.dp2-task:last-child { border-bottom: 0; }
+.dp2-task-bar { width: 3px; align-self: stretch; border-radius: 999px; flex: 0 0 3px; }
+.dp2-task-title { font-size: var(--fs-sm); font-weight: 500; }
+.dp2-task-meta { color: var(--ink-3); font-size: var(--fs-xs); margin-top: 2px; }
+.dp2-btn {
+  margin-right: auto; align-self: center; border: 1px solid var(--line); background: var(--paper);
+  color: var(--ink-2); font: inherit; font-size: var(--fs-xs); padding: 5px 13px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+}
+.dp2-btn:hover { border-color: var(--ok); color: var(--ok); }
+
+@media (max-width: 1020px) {
+  .dp2-grid { grid-template-columns: 1fr; }
+  .dp2-rail { width: 72px; flex: 0 0 72px; padding: 18px 9px; }
+  .dp2-brand-text, .dp2-nav span:not(.dp2-nav-dot), .dp2-navlabel, .dp2-me-text { display: none; }
+  .dp2-nav { justify-content: center; }
+  .dp2-me { justify-content: center; }
+  .dp2-main { padding: 22px 18px 40px; }
+  .dp2-band { flex-direction: column; }
+  .dp2-now { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dp2 * { transition: none !important; animation: none !important; }
+}

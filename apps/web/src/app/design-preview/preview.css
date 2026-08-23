@@ -1,0 +1,20 @@
+/* ستايلات معاينة التصميم — محصورة داخل .design-preview-root عمداً.
+   النسخة الأصلية في النموذج تضبط html/body مباشرة، وهو ما كان سيُعيد تنسيق
+   التطبيق القائم كله لأن CSS في Next.js عالمي النطاق. */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap');
+
+.design-preview-root {
+  background: #f3f2f2;
+  color: #201e1d;
+  font-family: 'Archivo', system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+.design-preview-root :focus-visible {
+  outline: 2px solid #ec3013;
+  outline-offset: 2px;
+}
+
+.design-preview-root ::selection {
+  background: rgba(236, 48, 19, 0.3);
+}

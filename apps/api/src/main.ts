@@ -19,9 +19,21 @@ async function bootstrap() {
   // Security headers
   app.use(helmet())
 
-  // CORS
+  // CORS — يقبل عدة نطاقات مفصولة بفاصلة، لأن النشر يُنتج أكثر من عنوان
+  // (نطاق الإنتاج + نطاقات المعاينة التي يولّدها Vercel لكل دفعة)
+  const allowedOrigins = (process.env.FRONTEND_URL ?? '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL,
+    origin: (origin, callback) => {
+      // الطلبات بلا Origin (curl، تطبيقات الجوال، فحوص الصحة) تُقبل
+      if (!origin) return callback(null, true)
+      const clean = origin.replace(/\/$/, '')
+      if (allowedOrigins.includes(clean)) return callback(null, true)
+      callback(new Error(`الأصل غير مسموح: ${origin}`), false)
+    },
     credentials: true,
   })
 

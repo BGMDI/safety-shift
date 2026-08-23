@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Modernist rule: zero border-radius everywhere. Avoid Tailwind's rounded-* utilities
+   in new markup rather than fighting them globally here. */
+html, body {
+  margin: 0;
+  background: #f3f2f2;
+  color: #201e1d;
+  font-family: 'Archivo', system-ui, sans-serif;
+}
+:focus-visible {
+  outline: 2px solid #ec3013;
+  outline-offset: 2px;
+}
+::selection {
+  background: rgba(236, 48, 19, 0.3);
+}
