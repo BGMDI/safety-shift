@@ -58,7 +58,11 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config))
   }
 
-  await app.listen(process.env.PORT ?? 4000)
+  // الربط بـ 0.0.0.0 صراحةً — داخل الحاويات لا يكفي الافتراضي أحياناً،
+  // فيستمع التطبيق على الواجهة المحلية فقط ولا تصله طلبات البوّابة
+  const port = Number(process.env.PORT ?? 4000)
+  await app.listen(port, '0.0.0.0')
+  console.log(`[bootstrap] يستمع على 0.0.0.0:${port} — PORT من البيئة: ${process.env.PORT ?? '(غير مضبوط)'}`)
 }
 
 bootstrap()
