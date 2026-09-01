@@ -5,6 +5,7 @@ const prisma = new PrismaClient()
 
 async function main() {
   const password = process.env.RESET_PASSWORD
+  const resetEmail = process.env.RESET_EMAIL || 'owner@shift-saas.com'
 
   if (!password || password.length < 12) {
     throw new Error('RESET_PASSWORD must contain at least 12 characters')
@@ -16,12 +17,21 @@ async function main() {
   })
 
   if (accounts.length === 0) {
-    throw new Error('No platform owner account exists in this database')
+    const created = await prisma.platformAdmin.create({
+      data: {
+        email: resetEmail,
+        fullName: process.env.RESET_NAME || 'مالك المنصة',
+        passwordHash: await bcrypt.hash(password, 12),
+      },
+      select: { email: true },
+    })
+
+    console.log(`Platform owner created successfully for ${created.email}`)
+    return
   }
 
-  const requestedEmail = process.env.RESET_EMAIL
-  const account = requestedEmail
-    ? accounts.find((candidate) => candidate.email.toLowerCase() === requestedEmail.toLowerCase())
+  const account = process.env.RESET_EMAIL
+    ? accounts.find((candidate) => candidate.email.toLowerCase() === resetEmail.toLowerCase())
     : accounts.length === 1
       ? accounts[0]
       : null
