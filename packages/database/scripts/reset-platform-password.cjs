@@ -10,13 +10,25 @@ async function main() {
     throw new Error('RESET_PASSWORD must contain at least 12 characters')
   }
 
-  const account = await prisma.platformAdmin.findUnique({
-    where: { email: 'owner@shift-saas.com' },
-    select: { id: true },
+  const accounts = await prisma.platformAdmin.findMany({
+    select: { id: true, email: true },
+    orderBy: { id: 'asc' },
   })
 
+  if (accounts.length === 0) {
+    throw new Error('No platform owner account exists in this database')
+  }
+
+  const requestedEmail = process.env.RESET_EMAIL
+  const account = requestedEmail
+    ? accounts.find((candidate) => candidate.email.toLowerCase() === requestedEmail.toLowerCase())
+    : accounts.length === 1
+      ? accounts[0]
+      : null
+
   if (!account) {
-    throw new Error('Platform owner account was not found')
+    const emails = accounts.map((candidate) => candidate.email).join(', ')
+    throw new Error(`Multiple platform owner accounts exist. Set RESET_EMAIL to one of: ${emails}`)
   }
 
   await prisma.platformAdmin.update({
@@ -24,7 +36,7 @@ async function main() {
     data: { passwordHash: await bcrypt.hash(password, 12) },
   })
 
-  console.log('Password updated successfully')
+  console.log(`Password updated successfully for ${account.email}`)
 }
 
 main()
