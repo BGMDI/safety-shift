@@ -11,6 +11,11 @@ const EMP_ID     = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const EMP_ROLE_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 
 async function main() {
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD
+  if (!adminPassword || adminPassword.length < 12) {
+    throw new Error('SEED_ADMIN_PASSWORD must be set and contain at least 12 characters')
+  }
+
   const tenant = await prisma.tenant.upsert({
     where: { id: TENANT_ID },
     update: {},
@@ -29,7 +34,7 @@ async function main() {
     create: { id: ROLE_ID, tenantId: tenant.id, name: 'super_admin' },
   })
 
-  const passwordHash = await bcrypt.hash('Admin@123456', 12)
+  const passwordHash = await bcrypt.hash(adminPassword, 12)
 
   const admin = await prisma.employee.upsert({
     where: { id: EMP_ID },
@@ -55,7 +60,7 @@ async function main() {
 
   console.log('✅ تم إنشاء البيانات الأولية')
   console.log('📧 البريد: admin@shift.com')
-  console.log('🔑 كلمة المرور: Admin@123456')
+  console.log('🔑 تم ضبط كلمة المرور من SEED_ADMIN_PASSWORD')
   console.log('🏪 الفرع ID:', branch.id)
 }
 

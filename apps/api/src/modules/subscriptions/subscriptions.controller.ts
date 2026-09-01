@@ -3,6 +3,8 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { Request } from 'express'
 import { SubscriptionsService } from './subscriptions.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
+import { RolesGuard } from '../../common/guards/roles.guard'
+import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { Public } from '../../common/decorators/public.decorator'
 import { JwtPayload } from '@shift-saas/types'
@@ -13,7 +15,8 @@ export class SubscriptionsController {
   constructor(private subscriptionsService: SubscriptionsService) {}
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin')
   @Post('checkout')
   checkout(
     @CurrentUser() user: JwtPayload,
@@ -28,7 +31,8 @@ export class SubscriptionsController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin')
   @Post('portal')
   portal(@CurrentUser() user: JwtPayload, @Body() body: { returnUrl: string }) {
     return this.subscriptionsService.getPortalUrl(user.tenantId, body.returnUrl)
