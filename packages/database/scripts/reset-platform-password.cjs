@@ -5,7 +5,8 @@ const prisma = new PrismaClient()
 
 async function main() {
   const password = process.env.RESET_PASSWORD
-  const resetEmail = process.env.RESET_EMAIL || 'owner@shift-saas.com'
+  const requestedEmail = process.env.RESET_EMAIL
+  const targetEmail = requestedEmail || 'owner@shift-saas.com'
 
   if (!password || password.length < 12) {
     throw new Error('RESET_PASSWORD must contain at least 12 characters')
@@ -19,7 +20,7 @@ async function main() {
   if (accounts.length === 0) {
     const created = await prisma.platformAdmin.create({
       data: {
-        email: resetEmail,
+        email: targetEmail,
         fullName: process.env.RESET_NAME || 'مالك المنصة',
         passwordHash: await bcrypt.hash(password, 12),
       },
@@ -30,10 +31,10 @@ async function main() {
     return
   }
 
-  const account = process.env.RESET_EMAIL
-    ? accounts.find((candidate) => candidate.email.toLowerCase() === resetEmail.toLowerCase())
-    : accounts.length === 1
-      ? accounts[0]
+  const account = accounts.length === 1
+    ? accounts[0]
+    : requestedEmail
+      ? accounts.find((candidate) => candidate.email.toLowerCase() === requestedEmail.toLowerCase())
       : null
 
   if (!account) {
@@ -41,12 +42,16 @@ async function main() {
     throw new Error(`Multiple platform owner accounts exist. Set RESET_EMAIL to one of: ${emails}`)
   }
 
-  await prisma.platformAdmin.update({
+  const updated = await prisma.platformAdmin.update({
     where: { id: account.id },
-    data: { passwordHash: await bcrypt.hash(password, 12) },
+    data: {
+      email: requestedEmail || account.email,
+      passwordHash: await bcrypt.hash(password, 12),
+    },
+    select: { email: true },
   })
 
-  console.log(`Password updated successfully for ${account.email}`)
+  console.log(`Platform owner updated successfully for ${updated.email}`)
 }
 
 main()
