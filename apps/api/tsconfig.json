@@ -13,7 +13,6 @@
     "strict": true,
     "skipLibCheck": true,
     "paths": {
-      "@shift-saas/database": ["../../packages/database/src"],
       "@shift-saas/types": ["../../packages/types/src"]
     }
   }

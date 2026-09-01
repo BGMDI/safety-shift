@@ -49,7 +49,9 @@ postgresql://user:pass@ep-xxx.eu-central-1.aws.neon.tech/neondb?sslmode=require
 
 ---
 
-## ٢. الـAPI — Railway
+## ٢. الـAPI — Railway أو Coolify
+
+في Coolify استخدم جذر المستودع (`/`) كـ **Base Directory**، ثم ضع الأمرين التاليين في **Build Command** و**Start Command**. وينطبق الإعداد نفسه على Railway.
 
 1. افتح [railway.app](https://railway.app) ← **Login with GitHub**
 2. **New Project** ← **Deploy from GitHub repo** ← اختر `BGMDI/safety-shift`
@@ -57,7 +59,7 @@ postgresql://user:pass@ep-xxx.eu-central-1.aws.neon.tech/neondb?sslmode=require
 
 **Build Command**
 ```
-npm install && npm run db:generate --workspace=packages/database && npm run build --workspace=apps/api
+npm ci && npm run db:generate --workspace=@shift-saas/database && npm run build --workspace=@shift-saas/database && npm run build --workspace=@shift-saas/api
 ```
 
 **Start Command**
