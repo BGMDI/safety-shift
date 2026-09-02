@@ -1,8 +1,9 @@
 import {
-  Controller, Get, Post, Put, Delete, Body, Param, Query, Req, UseGuards,
+  Controller, Get, Post, Put, Delete, Body, Param, Query, Req, Res, UseGuards,
   UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { Response } from 'express'
 import { diskStorage } from 'multer'
 import { extname, join } from 'path'
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
@@ -64,6 +65,27 @@ export class PlatformController {
     @Param('id') id: string, @Param('employeeId') employeeId: string,
     @Body() dto: ResetPlatformEmployeePasswordDto, @Req() req: any,
   ) { return this.svc.resetTenantEmployeePassword(id, employeeId, dto.password, req.user?.sub) }
+  @Get('tenants/:id/employees-template')
+  async employeeImportTemplate(@Param('id') id: string, @Res() res: Response) {
+    const file = await this.svc.createEmployeeImportTemplate(id)
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="employees-template.xlsx"`)
+    res.send(file)
+  }
+  @Post('tenants/:id/employees-import')
+  @UseInterceptors(FileInterceptor('file', {
+    fileFilter: (_req, file, cb) => {
+      const valid = file.originalname.toLowerCase().endsWith('.xlsx')
+      cb(valid ? null : new BadRequestException('يُسمح بملفات Excel بصيغة XLSX فقط'), valid)
+    },
+    limits: { fileSize: 5 * 1024 * 1024 },
+  }))
+  importEmployees(
+    @Param('id') id: string, @UploadedFile() file: Express.Multer.File, @Req() req: any,
+  ) {
+    if (!file) throw new BadRequestException('لم يتم اختيار ملف Excel')
+    return this.svc.importTenantEmployees(id, file.buffer, req.user?.sub)
+  }
 
   /* ── طلبات إجازة الشركة — عرض وحذف حصراً من لوحة مالك المنصة ── */
   @Get('tenants/:id/leave-requests') listLeaveRequests(@Param('id') id: string) { return this.svc.listTenantLeaveRequests(id) }

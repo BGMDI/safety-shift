@@ -3,6 +3,8 @@ import * as bcrypt from 'bcrypt'
 import { JwtService } from '@nestjs/jwt'
 import { prisma } from '@shift-saas/database'
 import { JwtPayload } from '@shift-saas/types'
+import ExcelJS from 'exceljs'
+import { randomUUID } from 'crypto'
 import {
   CreateTemplateDto, UpdateTemplateDto,
   CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto, UpdateTenantInfoDto,
@@ -156,6 +158,120 @@ export class PlatformService {
     await prisma.employee.update({ where: { id: employeeId }, data: { passwordHash } })
     await this.logPlatformAction(tenantId, 'EMPLOYEE_PASSWORD_RESET', employeeId, { platformAdminId })
     return { message: 'تم ضبط كلمة مرور الموظف' }
+  }
+
+  async createEmployeeImportTemplate(tenantId: string): Promise<Buffer> {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
+    if (!tenant) throw new NotFoundException('الشركة غير موجودة')
+    const workbook = new ExcelJS.Workbook()
+    workbook.creator = 'Shift SaaS'
+    const sheet = workbook.addWorksheet('الموظفون', { views: [{ rightToLeft: true }] })
+    sheet.columns = [
+      { header: 'الاسم الكامل *', key: 'fullName', width: 32 },
+      { header: 'البريد الإلكتروني', key: 'email', width: 30 },
+      { header: 'رقم الجوال', key: 'phone', width: 20 },
+      { header: 'الحالة', key: 'status', width: 18 },
+    ]
+    sheet.addRow({ fullName: 'مثال: أحمد محمد', email: 'ahmed@example.com', phone: '05XXXXXXXX', status: 'نشط' })
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0C6E63' } }
+    sheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' }
+    sheet.getRow(1).height = 24
+    sheet.autoFilter = 'A1:D1'
+    sheet.views = [{ rightToLeft: true, state: 'frozen', ySplit: 1 }]
+    sheet.getColumn(4).eachCell((cell, row) => { if (row > 1) cell.note = 'القيم المقبولة: نشط، موقوف، منتهي' })
+    const info = workbook.addWorksheet('تعليمات', { views: [{ rightToLeft: true }] })
+    info.addRows([
+      [`قالب استيراد موظفي ${tenant.name}`],
+      ['الاسم الكامل إلزامي. بقية الحقول اختيارية.'],
+      ['لا تغيّر أسماء الأعمدة في الصف الأول.'],
+      ['سيتم إنشاء الرقم الوظيفي تلقائياً وربط الموظف بالفرع الأول للشركة.'],
+      ['احذف صف المثال قبل رفع الملف. الحد الأقصى 1000 صف.'],
+    ])
+    info.getColumn(1).width = 80
+    info.getRow(1).font = { bold: true, size: 16, color: { argb: 'FF0C6E63' } }
+    const output = await workbook.xlsx.writeBuffer()
+    return Buffer.from(output)
+  }
+
+  async importTenantEmployees(tenantId: string, file: Buffer, platformAdminId: string) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }, select: { id: true, maxUsers: true, _count: { select: { employees: true } } },
+    })
+    if (!tenant) throw new NotFoundException('الشركة غير موجودة')
+    const branch = await prisma.branch.findFirst({ where: { tenantId }, orderBy: { createdAt: 'asc' } })
+    if (!branch) throw new BadRequestException('لا يوجد فرع في الشركة لربط الموظفين به')
+
+    let workbook: ExcelJS.Workbook
+    try {
+      workbook = new ExcelJS.Workbook()
+      await workbook.xlsx.load(file as any)
+    } catch {
+      throw new BadRequestException('ملف Excel غير صالح أو تالف')
+    }
+    const sheet = workbook.worksheets[0]
+    if (!sheet || sheet.rowCount < 2) throw new BadRequestException('ملف Excel لا يحتوي على بيانات موظفين')
+    if (sheet.rowCount > 1001) throw new BadRequestException('الحد الأقصى للاستيراد هو 1000 موظف في الملف الواحد')
+
+    const normalize = (value: string) => value.trim().toLowerCase().replace(/[\s_*]/g, '')
+    const headers = new Map<string, number>()
+    sheet.getRow(1).eachCell((cell, column) => headers.set(normalize(cell.text), column))
+    const col = (...names: string[]) => names.map(normalize).map(name => headers.get(name)).find(Boolean)
+    const nameCol = col('الاسم الكامل', 'الاسم', 'full name', 'fullname', 'name')
+    const emailCol = col('البريد الإلكتروني', 'البريد', 'email')
+    const phoneCol = col('رقم الجوال', 'الجوال', 'الهاتف', 'phone', 'mobile')
+    const statusCol = col('الحالة', 'status')
+    if (!nameCol) throw new BadRequestException('عمود «الاسم الكامل» غير موجود في الملف')
+
+    const rows: Array<{ row: number; fullName: string; email?: string; phone?: string; status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED' }> = []
+    for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber++) {
+      const row = sheet.getRow(rowNumber)
+      const fullName = row.getCell(nameCol).text.trim()
+      const email = emailCol ? row.getCell(emailCol).text.trim().toLowerCase() : ''
+      const phone = phoneCol ? row.getCell(phoneCol).text.trim() : ''
+      const rawStatus = statusCol ? normalize(row.getCell(statusCol).text) : ''
+      if (!fullName && !email && !phone) continue
+      const status = rawStatus === 'موقوف' || rawStatus === 'suspended' ? 'SUSPENDED'
+        : rawStatus === 'منتهي' || rawStatus === 'terminated' ? 'TERMINATED' : 'ACTIVE'
+      rows.push({ row: rowNumber, fullName, email: email || undefined, phone: phone || undefined, status })
+    }
+    if (!rows.length) throw new BadRequestException('لا توجد صفوف صالحة للاستيراد')
+
+    const candidateEmails = rows.flatMap(row => row.email ? [row.email] : [])
+    const candidatePhones = rows.flatMap(row => row.phone ? [row.phone] : [])
+    const [usedEmails, usedPhones] = await Promise.all([
+      prisma.employee.findMany({ where: { email: { in: candidateEmails } }, select: { email: true } }),
+      prisma.employee.findMany({ where: { tenantId, phone: { in: candidatePhones } }, select: { phone: true } }),
+    ])
+    const emails = new Set(usedEmails.flatMap(item => item.email ? [item.email.toLowerCase()] : []))
+    const phones = new Set(usedPhones.flatMap(item => item.phone ? [item.phone] : []))
+    const skipped: Array<{ row: number; reason: string }> = []
+    let imported = 0
+
+    for (const row of rows) {
+      if (!row.fullName) { skipped.push({ row: row.row, reason: 'الاسم الكامل مطلوب' }); continue }
+      if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) { skipped.push({ row: row.row, reason: 'البريد الإلكتروني غير صالح' }); continue }
+      if (row.email && emails.has(row.email)) { skipped.push({ row: row.row, reason: 'البريد الإلكتروني مستخدم مسبقاً' }); continue }
+      if (row.phone && phones.has(row.phone)) { skipped.push({ row: row.row, reason: 'رقم الجوال مستخدم مسبقاً في الشركة' }); continue }
+      if (tenant.maxUsers != null && tenant._count.employees + imported >= tenant.maxUsers) {
+        skipped.push({ row: row.row, reason: 'تم بلوغ الحد الأقصى لموظفي الشركة' }); continue
+      }
+      try {
+        await prisma.employee.create({
+          data: {
+            tenantId, branchId: branch.id, employeeCode: `IMP-${randomUUID().slice(0, 8).toUpperCase()}`,
+            fullName: row.fullName, email: row.email, phone: row.phone, status: row.status, hireDate: new Date(),
+          },
+        })
+        if (row.email) emails.add(row.email)
+        if (row.phone) phones.add(row.phone)
+        imported++
+      } catch { skipped.push({ row: row.row, reason: 'تعذر حفظ الموظف بسبب تعارض في البيانات' }) }
+    }
+    await this.logPlatformAction(tenantId, 'EMPLOYEES_EXCEL_IMPORT', undefined, {
+      platformAdminId, imported, skipped: skipped.length, totalRows: rows.length,
+    })
+    return { imported, skipped, totalRows: rows.length }
   }
 
   /** انتحال شخصية أدمن الشركة — يصكّ توكن دخول تينانت لأول موظف بدور super_admin في الشركة،

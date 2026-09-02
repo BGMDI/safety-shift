@@ -18,6 +18,7 @@ interface Employee {
   jobTitle: { id: string; name: string } | null
   employeeRoles: Array<{ role: { name: string } }>
 }
+interface ImportResult { imported: number; totalRows: number; skipped: Array<{ row: number; reason: string }> }
 
 const statusMeta: Record<EmployeeStatus, { label: string; color: string; soft: string }> = {
   ACTIVE: { label: 'نشط', color: 'var(--good)', soft: 'var(--good-soft)' },
@@ -41,6 +42,10 @@ export default function TenantOperationsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
+  const [showImport, setShowImport] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
 
   const load = async (query = '') => {
     const token = localStorage.getItem('platform_access_token')
@@ -88,6 +93,27 @@ export default function TenantOperationsPage() {
     finally { setSaving(false) }
   }
 
+  const downloadTemplate = async () => {
+    const response = await platformApi.get(`/platform/tenants/${id}/employees-template`, { responseType: 'blob' })
+    const url = URL.createObjectURL(response.data)
+    const link = document.createElement('a')
+    link.href = url; link.download = `قالب-موظفي-${tenant?.name ?? 'الشركة'}.xlsx`; link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const importEmployees = async () => {
+    if (!importFile) return
+    setImporting(true); setImportResult(null)
+    const body = new FormData(); body.append('file', importFile)
+    try {
+      const response = await platformApi.post(`/platform/tenants/${id}/employees-import`, body, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setImportResult(response.data)
+      await load(deferredSearch)
+    } catch (e: any) {
+      setImportResult({ imported: 0, totalRows: 0, skipped: [{ row: 0, reason: e.response?.data?.message ?? 'تعذر قراءة ملف Excel' }] })
+    } finally { setImporting(false) }
+  }
+
   const filtered = statusFilter === 'ALL' ? employees : employees.filter(e => e.status === statusFilter)
   if (loading && !tenant) return <div className="min-h-screen grid place-items-center" style={{ color: 'var(--ink-3)' }}>جارٍ تحميل بيانات الشركة…</div>
   if (!tenant) return <div className="p-8 text-center" style={{ color: 'var(--crit)' }}>تعذر تحميل الشركة</div>
@@ -110,8 +136,33 @@ export default function TenantOperationsPage() {
             <h1 className="text-3xl font-black mt-1" style={{ color: 'var(--ink)' }}>{tenant.name}</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--ink-3)' }}>{tenant._count.branches} فروع · إدارة حسابات الموظفين واستعادتها من مكان واحد</p>
           </div>
-          <span className="self-start text-xs px-3 py-1.5 rounded-full" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>مالك المنصة فقط</span>
+          <div className="flex items-center gap-2 self-start">
+            <button onClick={() => { setShowImport(v => !v); setImportResult(null) }} className="text-xs font-bold px-4 py-2 rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>↑ رفع موظفين من Excel</button>
+            <span className="text-xs px-3 py-1.5 rounded-full" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>مالك المنصة فقط</span>
+          </div>
         </header>
+
+        {showImport ? (
+          <section className="rounded-2xl p-5 mb-6" style={{ background: 'var(--surface)', border: '1px solid var(--line)', boxShadow: 'var(--shadow)' }}>
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 mb-4">
+              <div><h2 className="font-black" style={{ color: 'var(--ink)' }}>استيراد أسماء الموظفين</h2><p className="text-xs mt-1" style={{ color: 'var(--ink-3)' }}>نزّل القالب، املأ الأسماء، ثم ارفع الملف. الاسم فقط إلزامي، والرقم الوظيفي يُنشأ تلقائيًا.</p></div>
+              <button onClick={downloadTemplate} className="text-xs font-bold px-3 py-2 rounded-xl" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>↓ تنزيل قالب Excel</button>
+            </div>
+            <div className="flex flex-col md:flex-row gap-3">
+              <label className="flex-1 rounded-xl p-3 cursor-pointer" style={{ border: '1px dashed var(--line-strong)', background: 'var(--surface-2)' }}>
+                <span className="text-xs block" style={{ color: 'var(--ink-2)' }}>{importFile ? importFile.name : 'اختر ملف XLSX — حتى 1000 موظف'}</span>
+                <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={e => { setImportFile(e.target.files?.[0] ?? null); setImportResult(null) }} />
+              </label>
+              <button onClick={importEmployees} disabled={!importFile || importing} className="px-6 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40" style={{ background: 'var(--brand)' }}>{importing ? 'جارٍ الاستيراد…' : 'استيراد الموظفين'}</button>
+            </div>
+            {importResult ? (
+              <div className="mt-4 rounded-xl p-4" style={{ background: importResult.imported ? 'var(--good-soft)' : 'var(--crit-soft)' }}>
+                <p className="text-sm font-bold" style={{ color: importResult.imported ? 'var(--good)' : 'var(--crit)' }}>تمت إضافة {importResult.imported} من أصل {importResult.totalRows} صف</p>
+                {importResult.skipped.length ? <div className="mt-2 max-h-32 overflow-auto text-xs space-y-1" style={{ color: 'var(--ink-2)' }}>{importResult.skipped.map((item, index) => <p key={`${item.row}-${index}`}>{item.row ? `الصف ${item.row}: ` : ''}{item.reason}</p>)}</div> : null}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <section className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6" aria-label="إحصاءات الموظفين">
           {cards.map(([label, value, color, background]) => (

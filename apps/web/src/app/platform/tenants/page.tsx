@@ -18,6 +18,7 @@ const PLATFORM_ACTION_LABEL: Record<string, string> = {
   LEAVE_REQUEST_DELETE: '🗑 حذف طلب إجازة (من سجل الشركة فقط)',
   EMPLOYEE_UPDATE: '✎ تعديل بيانات موظف أو حالته',
   EMPLOYEE_PASSWORD_RESET: '🔐 إعادة ضبط كلمة مرور موظف',
+  EMPLOYEES_EXCEL_IMPORT: '📥 استيراد موظفين من ملف Excel',
 }
 interface Tenant {
   id: string; name: string; logo: string | null; planStatus: string; plan: string
