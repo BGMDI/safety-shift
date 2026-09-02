@@ -14,7 +14,8 @@ platformApi.interceptors.request.use((config) => {
 platformApi.interceptors.response.use(
   (res) => res,
   (error) => {
-    if (error.response?.status === 401) {
+    const isLoginRequest = error.config?.url?.endsWith('/platform-auth/login')
+    if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('platform_access_token')
       window.location.href = '/platform/login'
     }

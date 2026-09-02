@@ -1,22 +1,28 @@
 'use client'
-import { useState } from 'react'
+import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { platformApi } from '../../../lib/platform-api'
 
 export default function PlatformLoginPage() {
   const router = useRouter()
-  const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const submit = async () => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (loading) return
+
+    const data = new FormData(event.currentTarget)
+    const email = String(data.get('email') ?? '').trim()
+    const password = String(data.get('password') ?? '')
+
     setError(''); setLoading(true)
     try {
-      const r = await platformApi.post('/platform-auth/login', form)
+      const r = await platformApi.post('/platform-auth/login', { email, password })
       localStorage.setItem('platform_access_token', r.data.accessToken)
       router.push('/platform/tenants')
     } catch (e: any) {
-      setError(e.response?.data?.message ?? 'بيانات الدخول غير صحيحة')
+      setError(e.response?.data?.message ?? (e.request ? 'تعذر الاتصال بالخادم، حاول مرة أخرى' : 'تعذر تسجيل الدخول'))
     } finally { setLoading(false) }
   }
 
@@ -33,26 +39,24 @@ export default function PlatformLoginPage() {
           <p className="text-xs mt-1" style={{ color: 'var(--ink-3)' }}>حساب منفصل تماماً عن حسابات الشركات المشتركة</p>
         </div>
 
-        <div className="space-y-3">
+        <form className="space-y-3" onSubmit={submit}>
           <div>
             <label className="text-xs block mb-1" style={{ color: 'var(--ink-2)' }}>البريد الإلكتروني</label>
-            <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && submit()}
+            <input type="email" name="email" autoComplete="username" required
               className="w-full rounded-lg px-3 py-2 text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', color: 'var(--ink)' }} />
           </div>
           <div>
             <label className="text-xs block mb-1" style={{ color: 'var(--ink-2)' }}>كلمة المرور</label>
-            <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && submit()}
+            <input type="password" name="password" autoComplete="current-password" required
               className="w-full rounded-lg px-3 py-2 text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', color: 'var(--ink)' }} />
           </div>
           {error && <p className="text-xs" style={{ color: 'var(--crit)' }}>{error}</p>}
-          <button onClick={submit} disabled={loading || !form.email || !form.password}
+          <button type="submit" disabled={loading}
             className="w-full text-sm font-semibold text-white rounded-lg py-2.5 mt-2 disabled:opacity-50"
             style={{ background: 'var(--brand)' }}>
             {loading ? '⏳ جارٍ الدخول...' : 'تسجيل الدخول'}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   )
