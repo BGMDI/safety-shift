@@ -145,7 +145,7 @@ export default function TenantOperationsPage() {
         {showImport ? (
           <section className="rounded-2xl p-5 mb-6" style={{ background: 'var(--surface)', border: '1px solid var(--line)', boxShadow: 'var(--shadow)' }}>
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 mb-4">
-              <div><h2 className="font-black" style={{ color: 'var(--ink)' }}>استيراد أسماء الموظفين</h2><p className="text-xs mt-1" style={{ color: 'var(--ink-3)' }}>نزّل القالب، املأ الأسماء، ثم ارفع الملف. الاسم فقط إلزامي، والرقم الوظيفي يُنشأ تلقائيًا.</p></div>
+              <div><h2 className="font-black" style={{ color: 'var(--ink)' }}>استيراد بيانات الموظفين</h2><p className="text-xs mt-1" style={{ color: 'var(--ink-3)' }}>جميع البيانات إلزامية: الاسم، البريد، الجوال، الحالة، والفرع. الرقم الوظيفي فقط يُنشأ تلقائيًا.</p></div>
               <button onClick={downloadTemplate} className="text-xs font-bold px-3 py-2 rounded-xl" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>↓ تنزيل قالب Excel</button>
             </div>
             <div className="flex flex-col md:flex-row gap-3">

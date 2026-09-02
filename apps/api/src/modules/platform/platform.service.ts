@@ -161,31 +161,36 @@ export class PlatformService {
   }
 
   async createEmployeeImportTemplate(tenantId: string): Promise<Buffer> {
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }, select: { name: true, branches: { select: { name: true }, orderBy: { createdAt: 'asc' } } },
+    })
     if (!tenant) throw new NotFoundException('الشركة غير موجودة')
+    if (!tenant.branches.length) throw new BadRequestException('لا توجد فروع في الشركة لإنشاء القالب')
     const workbook = new ExcelJS.Workbook()
     workbook.creator = 'Shift SaaS'
     const sheet = workbook.addWorksheet('الموظفون', { views: [{ rightToLeft: true }] })
     sheet.columns = [
       { header: 'الاسم الكامل *', key: 'fullName', width: 32 },
-      { header: 'البريد الإلكتروني', key: 'email', width: 30 },
-      { header: 'رقم الجوال', key: 'phone', width: 20 },
-      { header: 'الحالة', key: 'status', width: 18 },
+      { header: 'البريد الإلكتروني *', key: 'email', width: 30 },
+      { header: 'رقم الجوال *', key: 'phone', width: 20 },
+      { header: 'الحالة *', key: 'status', width: 18 },
+      { header: 'الفرع *', key: 'branch', width: 26 },
     ]
-    sheet.addRow({ fullName: 'مثال: أحمد محمد', email: 'ahmed@example.com', phone: '05XXXXXXXX', status: 'نشط' })
+    sheet.addRow({ fullName: 'مثال: أحمد محمد', email: 'ahmed@example.com', phone: '0500000000', status: 'نشط', branch: tenant.branches[0].name })
     sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
     sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0C6E63' } }
     sheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' }
     sheet.getRow(1).height = 24
-    sheet.autoFilter = 'A1:D1'
+    sheet.autoFilter = 'A1:E1'
     sheet.views = [{ rightToLeft: true, state: 'frozen', ySplit: 1 }]
     sheet.getColumn(4).eachCell((cell, row) => { if (row > 1) cell.note = 'القيم المقبولة: نشط، موقوف، منتهي' })
     const info = workbook.addWorksheet('تعليمات', { views: [{ rightToLeft: true }] })
     info.addRows([
       [`قالب استيراد موظفي ${tenant.name}`],
-      ['الاسم الكامل إلزامي. بقية الحقول اختيارية.'],
+      ['جميع الحقول إلزامية: الاسم الكامل، البريد الإلكتروني، رقم الجوال، الحالة، والفرع.'],
       ['لا تغيّر أسماء الأعمدة في الصف الأول.'],
-      ['سيتم إنشاء الرقم الوظيفي تلقائياً وربط الموظف بالفرع الأول للشركة.'],
+      [`اكتب اسم الفرع كما هو تماماً. الفروع المتاحة: ${tenant.branches.map(branch => branch.name).join('، ')}`],
+      ['سيتم إنشاء الرقم الوظيفي تلقائياً. الحالات المقبولة: نشط، موقوف، منتهي.'],
       ['احذف صف المثال قبل رفع الملف. الحد الأقصى 1000 صف.'],
     ])
     info.getColumn(1).width = 80
@@ -199,8 +204,8 @@ export class PlatformService {
       where: { id: tenantId }, select: { id: true, maxUsers: true, _count: { select: { employees: true } } },
     })
     if (!tenant) throw new NotFoundException('الشركة غير موجودة')
-    const branch = await prisma.branch.findFirst({ where: { tenantId }, orderBy: { createdAt: 'asc' } })
-    if (!branch) throw new BadRequestException('لا يوجد فرع في الشركة لربط الموظفين به')
+    const branches = await prisma.branch.findMany({ where: { tenantId }, orderBy: { createdAt: 'asc' } })
+    if (!branches.length) throw new BadRequestException('لا يوجد فرع في الشركة لربط الموظفين به')
 
     let workbook: ExcelJS.Workbook
     try {
@@ -221,24 +226,28 @@ export class PlatformService {
     const emailCol = col('البريد الإلكتروني', 'البريد', 'email')
     const phoneCol = col('رقم الجوال', 'الجوال', 'الهاتف', 'phone', 'mobile')
     const statusCol = col('الحالة', 'status')
-    if (!nameCol) throw new BadRequestException('عمود «الاسم الكامل» غير موجود في الملف')
+    const branchCol = col('الفرع', 'branch')
+    const missingHeaders = [
+      !nameCol && 'الاسم الكامل', !emailCol && 'البريد الإلكتروني', !phoneCol && 'رقم الجوال',
+      !statusCol && 'الحالة', !branchCol && 'الفرع',
+    ].filter(Boolean)
+    if (missingHeaders.length) throw new BadRequestException(`الأعمدة الإلزامية غير موجودة: ${missingHeaders.join('، ')}`)
 
-    const rows: Array<{ row: number; fullName: string; email?: string; phone?: string; status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED' }> = []
+    const rows: Array<{ row: number; fullName: string; email: string; phone: string; rawStatus: string; branchName: string }> = []
     for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber++) {
       const row = sheet.getRow(rowNumber)
-      const fullName = row.getCell(nameCol).text.trim()
-      const email = emailCol ? row.getCell(emailCol).text.trim().toLowerCase() : ''
-      const phone = phoneCol ? row.getCell(phoneCol).text.trim() : ''
-      const rawStatus = statusCol ? normalize(row.getCell(statusCol).text) : ''
-      if (!fullName && !email && !phone) continue
-      const status = rawStatus === 'موقوف' || rawStatus === 'suspended' ? 'SUSPENDED'
-        : rawStatus === 'منتهي' || rawStatus === 'terminated' ? 'TERMINATED' : 'ACTIVE'
-      rows.push({ row: rowNumber, fullName, email: email || undefined, phone: phone || undefined, status })
+      const fullName = row.getCell(nameCol!).text.trim()
+      const email = row.getCell(emailCol!).text.trim().toLowerCase()
+      const phone = row.getCell(phoneCol!).text.trim()
+      const rawStatus = normalize(row.getCell(statusCol!).text)
+      const branchName = row.getCell(branchCol!).text.trim()
+      if (!fullName && !email && !phone && !rawStatus && !branchName) continue
+      rows.push({ row: rowNumber, fullName, email, phone, rawStatus, branchName })
     }
     if (!rows.length) throw new BadRequestException('لا توجد صفوف صالحة للاستيراد')
 
-    const candidateEmails = rows.flatMap(row => row.email ? [row.email] : [])
-    const candidatePhones = rows.flatMap(row => row.phone ? [row.phone] : [])
+    const candidateEmails = rows.map(row => row.email).filter(Boolean)
+    const candidatePhones = rows.map(row => row.phone).filter(Boolean)
     const [usedEmails, usedPhones] = await Promise.all([
       prisma.employee.findMany({ where: { email: { in: candidateEmails } }, select: { email: true } }),
       prisma.employee.findMany({ where: { tenantId, phone: { in: candidatePhones } }, select: { phone: true } }),
@@ -247,12 +256,23 @@ export class PlatformService {
     const phones = new Set(usedPhones.flatMap(item => item.phone ? [item.phone] : []))
     const skipped: Array<{ row: number; reason: string }> = []
     let imported = 0
+    const branchMap = new Map(branches.map(branch => [normalize(branch.name), branch]))
 
     for (const row of rows) {
       if (!row.fullName) { skipped.push({ row: row.row, reason: 'الاسم الكامل مطلوب' }); continue }
-      if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) { skipped.push({ row: row.row, reason: 'البريد الإلكتروني غير صالح' }); continue }
-      if (row.email && emails.has(row.email)) { skipped.push({ row: row.row, reason: 'البريد الإلكتروني مستخدم مسبقاً' }); continue }
-      if (row.phone && phones.has(row.phone)) { skipped.push({ row: row.row, reason: 'رقم الجوال مستخدم مسبقاً في الشركة' }); continue }
+      if (!row.email) { skipped.push({ row: row.row, reason: 'البريد الإلكتروني مطلوب' }); continue }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) { skipped.push({ row: row.row, reason: 'البريد الإلكتروني غير صالح' }); continue }
+      if (!row.phone) { skipped.push({ row: row.row, reason: 'رقم الجوال مطلوب' }); continue }
+      if (!row.rawStatus) { skipped.push({ row: row.row, reason: 'الحالة مطلوبة' }); continue }
+      if (!row.branchName) { skipped.push({ row: row.row, reason: 'الفرع مطلوب' }); continue }
+      const status = row.rawStatus === 'نشط' || row.rawStatus === 'active' ? 'ACTIVE'
+        : row.rawStatus === 'موقوف' || row.rawStatus === 'suspended' ? 'SUSPENDED'
+        : row.rawStatus === 'منتهي' || row.rawStatus === 'terminated' ? 'TERMINATED' : null
+      if (!status) { skipped.push({ row: row.row, reason: 'الحالة غير صالحة؛ استخدم نشط أو موقوف أو منتهي' }); continue }
+      const branch = branchMap.get(normalize(row.branchName))
+      if (!branch) { skipped.push({ row: row.row, reason: `الفرع «${row.branchName}» غير موجود في الشركة` }); continue }
+      if (emails.has(row.email)) { skipped.push({ row: row.row, reason: 'البريد الإلكتروني مستخدم مسبقاً' }); continue }
+      if (phones.has(row.phone)) { skipped.push({ row: row.row, reason: 'رقم الجوال مستخدم مسبقاً في الشركة' }); continue }
       if (tenant.maxUsers != null && tenant._count.employees + imported >= tenant.maxUsers) {
         skipped.push({ row: row.row, reason: 'تم بلوغ الحد الأقصى لموظفي الشركة' }); continue
       }
@@ -260,11 +280,11 @@ export class PlatformService {
         await prisma.employee.create({
           data: {
             tenantId, branchId: branch.id, employeeCode: `IMP-${randomUUID().slice(0, 8).toUpperCase()}`,
-            fullName: row.fullName, email: row.email, phone: row.phone, status: row.status, hireDate: new Date(),
+            fullName: row.fullName, email: row.email, phone: row.phone, status, hireDate: new Date(),
           },
         })
-        if (row.email) emails.add(row.email)
-        if (row.phone) phones.add(row.phone)
+        emails.add(row.email)
+        phones.add(row.phone)
         imported++
       } catch { skipped.push({ row: row.row, reason: 'تعذر حفظ الموظف بسبب تعارض في البيانات' }) }
     }
