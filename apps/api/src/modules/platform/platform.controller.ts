@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Delete, Body, Param, Req, UseGuards,
+  Controller, Get, Post, Put, Delete, Body, Param, Query, Req, UseGuards,
   UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
@@ -11,6 +11,7 @@ import { PlatformService } from './platform.service'
 import {
   CreateTemplateDto, UpdateTemplateDto,
   CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto, UpdateTenantInfoDto,
+  UpdatePlatformEmployeeDto, ResetPlatformEmployeePasswordDto,
 } from './dto/platform.dto'
 
 const logoStorage = diskStorage({
@@ -47,6 +48,22 @@ export class PlatformController {
   @Put('tenants/:id/extend') extend(@Param('id') id: string, @Body() dto: ExtendSubscriptionDto) { return this.svc.extendSubscription(id, dto) }
   @Put('tenants/:id/suspend') suspend(@Param('id') id: string) { return this.svc.suspendTenant(id) }
   @Put('tenants/:id/reactivate') reactivate(@Param('id') id: string) { return this.svc.reactivateTenant(id) }
+
+  /* ── موظفو الشركة — إدارة حصرية لمالك المنصة ── */
+  @Get('tenants/:id/employees')
+  listEmployees(@Param('id') id: string, @Query('search') search?: string) {
+    return this.svc.listTenantEmployees(id, search)
+  }
+  @Put('tenants/:id/employees/:employeeId')
+  updateEmployee(
+    @Param('id') id: string, @Param('employeeId') employeeId: string,
+    @Body() dto: UpdatePlatformEmployeeDto, @Req() req: any,
+  ) { return this.svc.updateTenantEmployee(id, employeeId, dto, req.user?.sub) }
+  @Put('tenants/:id/employees/:employeeId/password')
+  resetEmployeePassword(
+    @Param('id') id: string, @Param('employeeId') employeeId: string,
+    @Body() dto: ResetPlatformEmployeePasswordDto, @Req() req: any,
+  ) { return this.svc.resetTenantEmployeePassword(id, employeeId, dto.password, req.user?.sub) }
 
   /* ── طلبات إجازة الشركة — عرض وحذف حصراً من لوحة مالك المنصة ── */
   @Get('tenants/:id/leave-requests') listLeaveRequests(@Param('id') id: string) { return this.svc.listTenantLeaveRequests(id) }

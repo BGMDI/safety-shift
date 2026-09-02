@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, IsEnum, IsUUID, IsNumber, IsBoolean, IsIn } from 'class-validator'
+import { IsString, IsOptional, IsArray, IsEnum, IsUUID, IsNumber, IsBoolean, IsIn, IsEmail, MinLength, MaxLength } from 'class-validator'
 import { Type } from 'class-transformer'
 
 const MODULES = ['ATTENDANCE', 'SHIFTS', 'LEAVES', 'PAYROLL', 'CUSTODY', 'UNIFORMS', 'ONBOARDING', 'APPROVALS', 'ROLES', 'AUDIT'] as const
@@ -39,6 +39,17 @@ export class ExtendSubscriptionDto {
 export class UpdateTenantInfoDto {
   @IsOptional() @IsString() name?: string
   @IsOptional() @Type(() => Number) @IsNumber() maxUsers?: number | null
+}
+
+export class UpdatePlatformEmployeeDto {
+  @IsOptional() @IsString() @MaxLength(200) fullName?: string
+  @IsOptional() @IsEmail() email?: string
+  @IsOptional() @IsString() @MaxLength(30) phone?: string
+  @IsOptional() @IsIn(['ACTIVE', 'SUSPENDED', 'TERMINATED']) status?: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED'
+}
+
+export class ResetPlatformEmployeePasswordDto {
+  @IsString() @MinLength(12) @MaxLength(100) password!: string
 }
 
 export { MODULES, BILLING_CYCLES }

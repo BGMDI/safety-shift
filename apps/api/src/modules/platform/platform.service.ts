@@ -6,6 +6,7 @@ import { JwtPayload } from '@shift-saas/types'
 import {
   CreateTemplateDto, UpdateTemplateDto,
   CreateTenantDto, UpdateTenantModulesDto, ExtendSubscriptionDto, UpdateTenantInfoDto,
+  UpdatePlatformEmployeeDto,
 } from './dto/platform.dto'
 
 const CYCLE_DAYS: Record<string, number> = { MONTHLY: 30, QUARTERLY: 90, ANNUAL: 365 }
@@ -82,11 +83,79 @@ export class PlatformService {
       },
     })
     if (!t) throw new NotFoundException('الشركة غير موجودة')
+    const statusCounts = await prisma.employee.groupBy({
+      by: ['status'], where: { tenantId: id }, _count: { _all: true },
+    })
+    const counts = { active: 0, suspended: 0, terminated: 0, loginEnabled: 0 }
+    for (const row of statusCounts) counts[row.status.toLowerCase() as 'active' | 'suspended' | 'terminated'] = row._count._all
+    counts.loginEnabled = await prisma.employee.count({ where: { tenantId: id, status: 'ACTIVE', email: { not: null }, passwordHash: { not: null } } })
     return {
       ...t,
       usersUsed: t._count.employees,
       usersRemaining: t.maxUsers != null ? Math.max(0, t.maxUsers - t._count.employees) : null,
+      employeeCounts: counts,
     }
+  }
+
+  async listTenantEmployees(tenantId: string, search?: string) {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
+    if (!tenant) throw new NotFoundException('الشركة غير موجودة')
+    const term = search?.trim()
+    return prisma.employee.findMany({
+      where: {
+        tenantId,
+        ...(term && {
+          OR: [
+            { fullName: { contains: term, mode: 'insensitive' } },
+            { employeeCode: { contains: term, mode: 'insensitive' } },
+            { email: { contains: term, mode: 'insensitive' } },
+            { phone: { contains: term, mode: 'insensitive' } },
+          ],
+        }),
+      },
+      select: {
+        id: true, employeeCode: true, fullName: true, email: true, phone: true,
+        status: true, createdAt: true, updatedAt: true,
+        branch: { select: { id: true, name: true } },
+        department: { select: { id: true, name: true } },
+        jobTitle: { select: { id: true, name: true } },
+        employeeRoles: { select: { role: { select: { name: true } } } },
+      },
+      orderBy: [{ status: 'asc' }, { fullName: 'asc' }],
+    })
+  }
+
+  async updateTenantEmployee(tenantId: string, employeeId: string, dto: UpdatePlatformEmployeeDto, platformAdminId: string) {
+    const employee = await prisma.employee.findFirst({ where: { id: employeeId, tenantId } })
+    if (!employee) throw new NotFoundException('الموظف غير موجود في هذه الشركة')
+    if (dto.email && dto.email !== employee.email) {
+      const duplicate = await prisma.employee.findFirst({ where: { email: dto.email, NOT: { id: employeeId } }, select: { id: true } })
+      if (duplicate) throw new ConflictException('البريد الإلكتروني مستخدم في حساب آخر')
+    }
+    const updated = await prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        ...(dto.fullName !== undefined && { fullName: dto.fullName.trim() }),
+        ...(dto.email !== undefined && { email: dto.email.trim().toLowerCase() }),
+        ...(dto.phone !== undefined && { phone: dto.phone.trim() || null }),
+        ...(dto.status !== undefined && { status: dto.status }),
+      },
+      select: { id: true, employeeCode: true, fullName: true, email: true, phone: true, status: true },
+    })
+    await this.logPlatformAction(tenantId, 'EMPLOYEE_UPDATE', employeeId, {
+      platformAdminId, changedFields: Object.keys(dto), previousStatus: employee.status, newStatus: updated.status,
+    })
+    return updated
+  }
+
+  async resetTenantEmployeePassword(tenantId: string, employeeId: string, password: string, platformAdminId: string) {
+    const employee = await prisma.employee.findFirst({ where: { id: employeeId, tenantId }, select: { id: true, email: true } })
+    if (!employee) throw new NotFoundException('الموظف غير موجود في هذه الشركة')
+    if (!employee.email) throw new BadRequestException('أضف بريداً إلكترونياً للموظف قبل ضبط كلمة المرور')
+    const passwordHash = await bcrypt.hash(password, 12)
+    await prisma.employee.update({ where: { id: employeeId }, data: { passwordHash } })
+    await this.logPlatformAction(tenantId, 'EMPLOYEE_PASSWORD_RESET', employeeId, { platformAdminId })
+    return { message: 'تم ضبط كلمة مرور الموظف' }
   }
 
   /** انتحال شخصية أدمن الشركة — يصكّ توكن دخول تينانت لأول موظف بدور super_admin في الشركة،

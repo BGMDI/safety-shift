@@ -16,6 +16,8 @@ interface PlatformAudit {
 const PLATFORM_ACTION_LABEL: Record<string, string> = {
   TENANT_IMPERSONATE: '🔑 دخول كإدارة الشركة',
   LEAVE_REQUEST_DELETE: '🗑 حذف طلب إجازة (من سجل الشركة فقط)',
+  EMPLOYEE_UPDATE: '✎ تعديل بيانات موظف أو حالته',
+  EMPLOYEE_PASSWORD_RESET: '🔐 إعادة ضبط كلمة مرور موظف',
 }
 interface Tenant {
   id: string; name: string; logo: string | null; planStatus: string; plan: string
@@ -352,6 +354,9 @@ export default function PlatformTenantsPage() {
                     })}
                   </div>
                   <div className="flex items-center gap-2 mb-3">
+                    <a href={`/platform/tenants/${t.id}`} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                      👥 إدارة الموظفين والبيانات
+                    </a>
                     <button onClick={() => impersonate(t.id, t.name)} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
                       🔑 دخول كإدارة الشركة — تحكّم كامل بلا قيود أدوار
                     </button>
