@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'لوحة مالك المنصة — نظام الشِّفتات',
+  title: 'لوحة مالك المنصة — نظام وردية',
 }
 
 export default function PlatformLayout({ children }: { children: React.ReactNode }) {

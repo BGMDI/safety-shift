@@ -3,9 +3,9 @@ import { RouteGuard } from '../../components/layout/route-guard'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="app-shell flex min-h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="app-main flex-1 min-w-0 overflow-auto">
         <RouteGuard>{children}</RouteGuard>
       </main>
     </div>

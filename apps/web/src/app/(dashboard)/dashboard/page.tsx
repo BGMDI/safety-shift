@@ -152,15 +152,10 @@ export default function DashboardPage() {
 
         {/* شريط القيادة */}
         <div className="flex items-center gap-3 mb-6 reveal">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(150deg, var(--brand), var(--brand-2))', boxShadow: '0 6px 16px -6px color-mix(in srgb, var(--brand) 60%, transparent)' }}>
-            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/>
-            </svg>
-          </div>
+          <span className="wardiya-mark dashboard-brand-mark" role="img" aria-label="شعار نظام وردية" />
           <div>
-            <h1 className="text-lg font-extrabold" style={{ color: 'var(--ink)' }}>نظام الشِّفتات</h1>
-            <p className="text-xs" style={{ color: 'var(--ink-2)' }}>لوحة تحكم الموارد البشرية</p>
+            <h1 className="text-lg font-extrabold" style={{ color: 'var(--ink)' }}>نظام وردية</h1>
+            <p className="text-xs" style={{ color: 'var(--ink-2)' }}>مركز عمليات الموارد البشرية</p>
           </div>
           <div className="flex-1" />
           <span className="text-xs px-3 py-1.5 rounded-full flex items-center gap-2"

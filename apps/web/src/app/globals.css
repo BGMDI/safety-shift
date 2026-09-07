@@ -7,27 +7,27 @@
    يُستخدم عبر var(--token) في الصفحات المُعاد تصميمها
 ══════════════════════════════════════════ */
 :root {
-  --ground: #EFF3F2;
+  --ground: #F1F5F9;
   --surface: #FFFFFF;
-  --surface-2: #F5F8F7;
-  --ink: #13201D;
-  --ink-2: #4C5A56;
-  --ink-3: #879690;
-  --line: #E1E8E5;
-  --line-strong: #CBD6D2;
-  --brand: #0C6E63;
-  --brand-2: #0A544C;
-  --brand-soft: #E1EEEB;
-  --accent: #B67F1F;
-  --accent-soft: #F4E9D2;
+  --surface-2: #F7FAFD;
+  --ink: #011F2A;
+  --ink-2: #415767;
+  --ink-3: #7B8C9A;
+  --line: #E3EAF1;
+  --line-strong: #CBD7E2;
+  --brand: #1E90FF;
+  --brand-2: #1253C9;
+  --brand-soft: #EAF4FF;
+  --accent: #3682F9;
+  --accent-soft: #E8F1FF;
   --good: #2E9E6B;
   --good-soft: #E1F1E9;
   --warn: #C67E22;
   --warn-soft: #F6EAD7;
   --crit: #C13E51;
   --crit-soft: #F6E1E4;
-  --shadow: 0 1px 2px rgba(19,32,29,.04), 0 6px 20px -8px rgba(19,32,29,.10);
-  --shadow-lift: 0 2px 4px rgba(19,32,29,.05), 0 14px 34px -12px rgba(19,32,29,.18);
+  --shadow: 0 1px 2px rgba(1,31,42,.04), 0 8px 24px -14px rgba(1,31,42,.18);
+  --shadow-lift: 0 8px 30px -14px rgba(1,31,42,.28);
 
   --background: var(--ground);
   --foreground: var(--ink);
@@ -35,11 +35,11 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground: #0C1412; --surface: #141F1C; --surface-2: #1A2622;
-    --ink: #E7EEEB; --ink-2: #A0B0AB; --ink-3: #6B7C77;
-    --line: #253330; --line-strong: #34443F;
-    --brand: #45AC9D; --brand-2: #2F8E80; --brand-soft: #16302B;
-    --accent: #D6A64C; --accent-soft: #2C2716;
+    --ground: #061722; --surface: #0B2230; --surface-2: #102B3B;
+    --ink: #F4F8FC; --ink-2: #B5C5D1; --ink-3: #7891A3;
+    --line: #17394B; --line-strong: #245069;
+    --brand: #65B8FF; --brand-2: #3682F9; --brand-soft: #0D3452;
+    --accent: #1E90FF; --accent-soft: #0A3150;
     --good: #46B888; --good-soft: #163024;
     --warn: #DBA150; --warn-soft: #2E2617;
     --crit: #DE6577; --crit-soft: #331B20;
@@ -48,22 +48,22 @@
   }
 }
 :root[data-theme="light"] {
-  --ground: #EFF3F2; --surface: #FFFFFF; --surface-2: #F5F8F7;
-  --ink: #13201D; --ink-2: #4C5A56; --ink-3: #879690;
-  --line: #E1E8E5; --line-strong: #CBD6D2;
-  --brand: #0C6E63; --brand-2: #0A544C; --brand-soft: #E1EEEB;
-  --accent: #B67F1F; --accent-soft: #F4E9D2;
+  --ground: #F1F5F9; --surface: #FFFFFF; --surface-2: #F7FAFD;
+  --ink: #011F2A; --ink-2: #415767; --ink-3: #7B8C9A;
+  --line: #E3EAF1; --line-strong: #CBD7E2;
+  --brand: #1E90FF; --brand-2: #1253C9; --brand-soft: #EAF4FF;
+  --accent: #3682F9; --accent-soft: #E8F1FF;
   --good: #2E9E6B; --good-soft: #E1F1E9; --warn: #C67E22; --warn-soft: #F6EAD7;
   --crit: #C13E51; --crit-soft: #F6E1E4;
   --shadow: 0 1px 2px rgba(19,32,29,.04), 0 6px 20px -8px rgba(19,32,29,.10);
   --shadow-lift: 0 2px 4px rgba(19,32,29,.05), 0 14px 34px -12px rgba(19,32,29,.18);
 }
 :root[data-theme="dark"] {
-  --ground: #0C1412; --surface: #141F1C; --surface-2: #1A2622;
-  --ink: #E7EEEB; --ink-2: #A0B0AB; --ink-3: #6B7C77;
-  --line: #253330; --line-strong: #34443F;
-  --brand: #45AC9D; --brand-2: #2F8E80; --brand-soft: #16302B;
-  --accent: #D6A64C; --accent-soft: #2C2716;
+  --ground: #061722; --surface: #0B2230; --surface-2: #102B3B;
+  --ink: #F4F8FC; --ink-2: #B5C5D1; --ink-3: #7891A3;
+  --line: #17394B; --line-strong: #245069;
+  --brand: #65B8FF; --brand-2: #3682F9; --brand-soft: #0D3452;
+  --accent: #1E90FF; --accent-soft: #0A3150;
   --good: #46B888; --good-soft: #163024; --warn: #DBA150; --warn-soft: #2E2617;
   --crit: #DE6577; --crit-soft: #331B20;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -10px rgba(0,0,0,.5);
@@ -73,7 +73,169 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Segoe UI", "Noto Sans Arabic", "Tajawal", Tahoma, system-ui, sans-serif;
+  font-family: var(--font-arabic), "Tajawal", "Segoe UI", Tahoma, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+::selection { background: var(--brand-soft); color: var(--brand-2); }
+
+/* ── App shell: a calm operations workspace, shared by every legacy screen ── */
+.app-shell {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brand) 2.5%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--brand) 2.5%, transparent) 1px, transparent 1px),
+    var(--ground);
+  background-size: 32px 32px;
+}
+.app-main { position: relative; isolation: isolate; }
+.app-main::before {
+  content: ""; position: fixed; inset: 0 256px auto 0; height: 3px; z-index: 40;
+  background: linear-gradient(90deg, #65B8FF, #3682F9 54%, #1E90FF);
+  pointer-events: none;
+}
+
+/* Upgrade existing screens without rewriting their business logic. */
+.app-main > div { width: 100%; }
+.app-main .bg-gray-50 { background-color: var(--surface-2) !important; }
+.app-main .bg-gray-100 { background-color: color-mix(in srgb, var(--surface-2) 82%, var(--line)) !important; }
+.app-main .bg-white {
+  background-color: var(--surface) !important;
+  border-color: var(--line) !important;
+}
+.app-main .text-gray-900, .app-main .text-gray-800 { color: var(--ink) !important; }
+.app-main .text-gray-700, .app-main .text-gray-600 { color: var(--ink-2) !important; }
+.app-main .text-gray-500, .app-main .text-gray-400 { color: var(--ink-3) !important; }
+.app-main .border, .app-main .border-b, .app-main .border-t,
+.app-main .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: var(--line) !important; }
+.app-main .shadow-sm { box-shadow: var(--shadow) !important; }
+.app-main .shadow-lg { box-shadow: var(--shadow-lift) !important; }
+
+.app-main input:not([type="checkbox"]):not([type="radio"]),
+.app-main select, .app-main textarea {
+  background: var(--surface); color: var(--ink); border-color: var(--line-strong) !important;
+  border-radius: 10px; min-height: 42px; transition: border-color .18s, box-shadow .18s, background .18s;
+}
+.app-main input:focus, .app-main select:focus, .app-main textarea:focus {
+  outline: none !important; border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 15%, transparent) !important;
+}
+.app-main input::placeholder, .app-main textarea::placeholder { color: var(--ink-3); }
+.app-main table { border-collapse: separate; border-spacing: 0; }
+.app-main thead { background: var(--surface-2) !important; }
+.app-main th {
+  color: var(--ink-2) !important; font-size: 11px !important; font-weight: 700 !important;
+  letter-spacing: .02em; white-space: nowrap;
+}
+.app-main tbody tr { transition: background-color .15s ease; }
+.app-main tbody tr:hover { background: color-mix(in srgb, var(--brand-soft) 42%, transparent) !important; }
+.app-main button, .app-main a { -webkit-tap-highlight-color: transparent; }
+.app-main button:focus-visible, .app-main a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand) 30%, transparent); outline-offset: 2px;
+}
+.app-main .bg-blue-600, .app-main .bg-blue-500 { background-color: var(--brand) !important; }
+.app-main .hover\:bg-blue-700:hover { background-color: var(--brand-2) !important; }
+.app-main .text-blue-700, .app-main .text-blue-600, .app-main .text-blue-500 { color: var(--brand) !important; }
+.app-main .bg-blue-50, .app-main .bg-blue-100 { background-color: var(--brand-soft) !important; }
+.app-main .border-blue-600 { border-color: var(--brand) !important; }
+
+@media (max-width: 767px) {
+  .app-shell { display: block; padding-top: 64px; }
+  .app-main::before { inset-inline: 0; }
+  .app-main > div { padding: 16px !important; }
+  .app-main table { min-width: 720px; }
+  .app-main .overflow-hidden:has(table) { overflow-x: auto !important; }
+}
+
+/* ── Wardiya sign-in ── */
+.wardiya-login { min-height: 100vh; display: grid; grid-template-columns: minmax(420px, .92fr) minmax(520px, 1.08fr); direction: ltr; background: #f6f9fc; }
+.login-story { position: relative; overflow: hidden; display: grid; place-items: center; min-height: 100vh; color: #fff; background: radial-gradient(circle at 28% 22%, rgba(101,184,255,.28), transparent 23%), linear-gradient(145deg, #073652 0%, #011f2a 54%, #011720 100%); direction: rtl; }
+.login-story::after { content: ""; position: absolute; inset: auto -12% -30% auto; width: 520px; height: 520px; border-radius: 50%; background: radial-gradient(circle, rgba(30,144,255,.20), transparent 68%); }
+.story-content { position: relative; z-index: 2; width: min(480px, 78%); }
+.wardiya-mark { display: inline-block; background-image: url('/brand/wardiya-brand-board.png'); background-repeat: no-repeat; }
+.story-logo { width: 158px; height: 125px; margin: 0 -10px 28px 0; background-size: 404px 404px; background-position: -23px -86px; filter: drop-shadow(0 18px 24px rgba(0,0,0,.25)); }
+.story-kicker { color: #65b8ff; font: 700 10px/1 var(--font-latin), sans-serif; letter-spacing: .24em; direction: ltr; text-align: right; }
+.story-content h1 { margin-top: 18px; font-size: clamp(42px, 5.2vw, 72px); line-height: 1.08; font-weight: 800; letter-spacing: -.055em; }
+.story-content h1 span { color: #65b8ff; }
+.story-copy { max-width: 420px; margin-top: 24px; color: rgba(236,247,255,.68); font-size: 15px; line-height: 1.9; }
+.story-status { width: fit-content; margin-top: 40px; padding: 10px 13px; display: flex; align-items: center; gap: 9px; color: rgba(236,247,255,.75); font-size: 11px; border: 1px solid rgba(101,184,255,.16); border-radius: 12px; background: rgba(101,184,255,.07); }
+.story-status i { width: 7px; height: 7px; border-radius: 50%; background: #65b8ff; box-shadow: 0 0 0 5px rgba(101,184,255,.1); }
+.story-orbit { position: absolute; border: 1px solid rgba(101,184,255,.1); border-radius: 50%; }
+.orbit-one { width: 440px; height: 440px; inset: -190px -180px auto auto; }
+.orbit-two { width: 660px; height: 660px; inset: -300px -290px auto auto; }
+.login-panel { display: grid; place-items: center; min-height: 100vh; padding: 48px; direction: rtl; background: radial-gradient(circle at 100% 0, rgba(101,184,255,.10), transparent 28%), #f6f9fc; }
+.login-card { width: min(440px, 100%); }
+.login-mobile-brand { display: none; }
+.login-heading > span { color: #1e90ff; font-size: 11px; font-weight: 800; letter-spacing: .04em; }
+.login-heading h2 { margin-top: 9px; color: #011f2a; font-size: 30px; line-height: 1.3; font-weight: 800; letter-spacing: -.03em; }
+.login-heading p { margin: 8px 0 34px; color: #718493; font-size: 13px; }
+.login-label { display: block; margin-bottom: 8px; color: #314957; font-size: 12px; font-weight: 700; }
+.login-input { min-height: 50px; display: flex; align-items: center; gap: 11px; padding: 0 15px; color: #7790a0; border: 1px solid #dce6ee; border-radius: 13px; background: #fff; box-shadow: 0 4px 16px -14px rgba(1,31,42,.3); transition: .18s; }
+.login-input:focus-within { color: #1e90ff; border-color: #1e90ff; box-shadow: 0 0 0 4px rgba(30,144,255,.11); }
+.login-input input { width: 100%; height: 48px; color: #011f2a; font: 500 13px var(--font-latin), var(--font-arabic), sans-serif; direction: ltr; border: 0; outline: 0; background: transparent; }
+.login-input input::placeholder { color: #a4b2bd; }
+.login-submit { width: 100%; min-height: 50px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #fff; border-radius: 13px; background: linear-gradient(105deg, #1e90ff, #1253c9); box-shadow: 0 13px 28px -15px rgba(18,83,201,.72); font-size: 13px; font-weight: 800; transition: transform .18s, box-shadow .18s; }
+.login-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 17px 32px -15px rgba(18,83,201,.85); }
+.login-submit:disabled { opacity: .58; cursor: wait; }
+.login-footnote { margin-top: 26px; color: #91a0ac; font-size: 10px; text-align: center; }
+
+@media (max-width: 900px) {
+  .wardiya-login { grid-template-columns: 1fr; }
+  .login-story { display: none; }
+  .login-panel { padding: 28px 20px; }
+  .login-mobile-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 34px; }
+  .login-mobile-brand .wardiya-mark { width: 62px; height: 51px; background-size: 159px 159px; background-position: -9px -34px; }
+  .login-mobile-brand strong { color: #011f2a; font-size: 19px; font-weight: 800; }
+  .login-heading { text-align: center; }
+}
+
+/* ── Wardiya navigation ── */
+.ops-sidebar {
+  width: 272px; height: 100vh; position: sticky; top: 0; z-index: 50; flex: 0 0 272px;
+  display: flex; flex-direction: column; color: #eef7ff;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(54,130,249,.32), transparent 30%),
+    linear-gradient(175deg, #072b43 0%, #011f2a 58%, #011720 100%);
+  border-left: 1px solid rgba(101,184,255,.14);
+  box-shadow: -12px 0 36px rgba(1,31,42,.12);
+}
+.sidebar-head { min-height: 88px; padding: 18px 18px 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.08); }
+.brand-lockup { min-width: 0; display: flex; align-items: center; gap: 11px; }
+.brand-logo { width: 56px; height: 47px; flex: 0 0 auto; background-size: 143px 143px; background-position: -8px -30px; filter: drop-shadow(0 7px 10px rgba(0,0,0,.22)); }
+.dashboard-brand-mark { width: 58px; height: 47px; flex: 0 0 auto; background-size: 148px 148px; background-position: -8px -31px; }
+.brand-lockup strong { display: block; color: #fff; font-size: 18px; line-height: 1.25; font-weight: 800; letter-spacing: -.02em; }
+.brand-lockup small { display: block; margin-top: 4px; color: rgba(224,240,251,.55); font-size: 10px; font-weight: 500; white-space: nowrap; }
+.sidebar-close { display: none; color: #fff; padding: 8px; border-radius: 10px; }
+.sidebar-status { margin: 14px 14px 4px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border-radius: 12px; background: rgba(30,144,255,.09); border: 1px solid rgba(101,184,255,.13); }
+.sidebar-status b, .sidebar-status small { display: block; }
+.sidebar-status b { font-size: 11px; color: #e8f5ff; }
+.sidebar-status small { margin-top: 2px; font-size: 9px; color: rgba(224,240,251,.5); }
+.status-pulse { width: 8px; height: 8px; border-radius: 999px; background: #65b8ff; box-shadow: 0 0 0 4px rgba(101,184,255,.12); }
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 8px 12px 20px; scrollbar-width: thin; scrollbar-color: rgba(101,184,255,.22) transparent; }
+.nav-group { margin-top: 17px; }
+.nav-group h2 { padding: 0 11px 7px; color: rgba(224,240,251,.36); font-family: var(--font-latin), var(--font-arabic); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+.nav-link { position: relative; display: flex; align-items: center; gap: 11px; min-height: 42px; margin: 2px 0; padding: 8px 11px; color: rgba(235,247,255,.7); border-radius: 11px; font-size: 13px; font-weight: 500; transition: color .16s, background .16s, transform .16s; }
+.nav-link:hover { color: #fff; background: rgba(255,255,255,.06); transform: translateX(-2px); }
+.nav-link.is-active { color: #fff; background: linear-gradient(90deg, rgba(30,144,255,.24), rgba(54,130,249,.11)); font-weight: 700; box-shadow: inset 0 0 0 1px rgba(101,184,255,.12); }
+.nav-link.is-active svg { color: #65b8ff; }
+.nav-link i { position: absolute; right: 0; width: 3px; height: 22px; border-radius: 3px 0 0 3px; background: #65b8ff; box-shadow: 0 0 12px rgba(101,184,255,.65); }
+.sidebar-footer { padding: 13px 14px; display: flex; align-items: center; gap: 8px; border-top: 1px solid rgba(255,255,255,.08); }
+.sidebar-theme { width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto; color: #dbefff; border: 1px solid rgba(255,255,255,.1); border-radius: 11px; background: rgba(255,255,255,.05); }
+.logout-button { min-height: 40px; flex: 1; display: flex; align-items: center; gap: 9px; padding: 0 12px; color: rgba(235,247,255,.62); border-radius: 11px; font-size: 12px; transition: .16s; }
+.logout-button:hover { color: #fff; background: rgba(255,255,255,.06); }
+.mobile-bar, .sidebar-scrim { display: none; }
+
+@media (max-width: 767px) {
+  .mobile-bar { position: fixed; inset: 0 0 auto; z-index: 45; height: 64px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; background: rgba(1,31,42,.96); border-bottom: 1px solid rgba(101,184,255,.16); backdrop-filter: blur(16px); }
+  .mobile-menu, .mobile-theme { width: 39px; height: 39px; display: grid; place-items: center; color: #eff8ff; border: 1px solid rgba(255,255,255,.1); border-radius: 11px; background: rgba(255,255,255,.05); }
+  .brand-lockup.is-compact { gap: 7px; }
+  .brand-lockup.is-compact .brand-logo { width: 43px; height: 37px; background-size: 111px 111px; background-position: -6px -24px; }
+  .brand-lockup.is-compact strong { font-size: 15px; }
+  .ops-sidebar { position: fixed; inset: 0 auto 0 0; width: min(86vw, 292px); transform: translateX(-105%); transition: transform .25s cubic-bezier(.2,.7,.2,1); box-shadow: 20px 0 60px rgba(1,17,25,.35); }
+  .ops-sidebar.is-open { transform: translateX(0); }
+  .sidebar-close { display: grid; place-items: center; }
+  .sidebar-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: rgba(1,20,29,.55); backdrop-filter: blur(3px); }
 }
 
 @media (prefers-reduced-motion: no-preference) {

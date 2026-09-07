@@ -1,9 +1,23 @@
 import type { Metadata } from 'next'
+import { Inter, Tajawal } from 'next/font/google'
 import './globals.css'
 
+const tajawal = Tajawal({
+  subsets: ['arabic'],
+  weight: ['400', '500', '700', '800'],
+  variable: '--font-arabic',
+  display: 'swap',
+})
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-latin',
+  display: 'swap',
+})
+
 export const metadata: Metadata = {
-  title: 'نظام إدارة الشفتات',
-  description: 'منصة متكاملة لإدارة الشفتات والموارد البشرية',
+  title: { default: 'نظام وردية', template: '%s | نظام وردية' },
+  description: 'إدارة أسهل، ورديات أذكى',
 }
 
 // يمنع "وميض" الثيم الخاطئ قبل تحميل React — يُنفَّذ فوراً قبل الرسم الأول
@@ -24,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
-      <body>{children}</body>
+      <body className={`${tajawal.variable} ${inter.variable}`}>{children}</body>
     </html>
   )
 }
