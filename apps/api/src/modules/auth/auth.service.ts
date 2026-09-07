@@ -10,16 +10,25 @@ export class AuthService {
   constructor(private jwtService: JwtService) {}
 
   async login(dto: LoginDto): Promise<AuthTokens> {
+    // المطابقة بلا حساسية لحالة الأحرف — بريد خُزّن بأحرف كبيرة كان يمنع صاحبه من الدخول
+    const email = dto.email.trim()
     const employee = await prisma.employee.findFirst({
-      where: { email: dto.email },
+      where: { email: { equals: email, mode: 'insensitive' } },
       include: {
         employeeRoles: { include: { role: true } },
         tenant: { select: { planStatus: true, subscriptionEndsAt: true, enabledModules: true } },
       },
     })
 
-    if (!employee || !employee.passwordHash || employee.status !== 'ACTIVE') {
-      throw new UnauthorizedException('بيانات الدخول غير صحيحة')
+    if (!employee) throw new UnauthorizedException('بيانات الدخول غير صحيحة')
+
+    // سببان شائعان لتعثّر حساب جديد: أُنشئ بلا كلمة مرور، أو حالته ليست «نشط».
+    // رسالتهما مميّزة لأن «بيانات الدخول غير صحيحة» كانت تُضلّل المسؤول والموظف معاً.
+    if (!employee.passwordHash) {
+      throw new UnauthorizedException('لم تُضبط كلمة مرور لهذا الحساب بعد — راجع مسؤول النظام')
+    }
+    if (employee.status !== 'ACTIVE') {
+      throw new UnauthorizedException('الحساب غير مفعّل — راجع مسؤول النظام')
     }
 
     // اقفل الدخول تلقائياً إذا انتهت مدة الاشتراك ولم تُجدَّد بعد

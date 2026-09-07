@@ -19,6 +19,12 @@ function emptyToNull<T extends string | undefined>(v: T): string | null | undefi
   return trimmed === '' ? null : trimmed
 }
 
+/** يوحّد البريد: تشذيب + أحرف صغيرة — الدخول يطابق البريد، وفارق حالة الأحرف كان يمنع الموظف من الدخول */
+function normalizeEmail<T extends string | undefined>(v: T): string | null | undefined {
+  const trimmed = emptyToNull(v)
+  return typeof trimmed === 'string' ? trimmed.toLowerCase() : trimmed
+}
+
 const DUPLICATE_FIELD_LABEL: Record<string, string> = {
   email: 'البريد الإلكتروني',
   phone: 'رقم الجوال',
@@ -138,6 +144,16 @@ export class EmployeesService {
     })
     if (existing) throw new ConflictException('كود الموظف مستخدم مسبقاً')
 
+    const email = normalizeEmail(dto.email)
+    if (email) {
+      // الفهرس الفريد حسّاس لحالة الأحرف، فبريدان يختلفان بالحالة يمرّان كحسابين ويلتبس الدخول بينهما
+      const emailTaken = await prisma.employee.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
+        select: { id: true },
+      })
+      if (emailTaken) throw new ConflictException('البريد الإلكتروني مستخدم مسبقاً')
+    }
+
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 12) : undefined
 
     // احسب الاسم المركب إذا أُرسلت الأجزاء، وإلا استخدم fullName مباشرة
@@ -166,7 +182,7 @@ export class EmployeesService {
           qualification: (dto as any).qualification,
           specialization: (dto as any).specialization,
           iban: emptyToNull(dto.iban),
-          email: emptyToNull(dto.email),
+          email,
           phone: emptyToNull(dto.phone),
           hireDate: new Date(dto.hireDate),
           passwordHash,
@@ -188,6 +204,16 @@ export class EmployeesService {
     if (idExpiryDate)  data.idExpiryDate  = new Date(idExpiryDate)
     if (birthDate)     data.birthDate     = new Date(birthDate)
     if (password)      data.passwordHash  = await bcrypt.hash(password, 12)
+    if (data.email !== undefined) {
+      data.email = normalizeEmail(data.email)
+      if (data.email) {
+        const emailTaken = await prisma.employee.findFirst({
+          where: { email: { equals: data.email, mode: 'insensitive' }, NOT: { id } },
+          select: { id: true },
+        })
+        if (emailTaken) throw new ConflictException('البريد الإلكتروني مستخدم مسبقاً')
+      }
+    }
 
     // أجزاء الاسم — إذا أُرسل أي جزء أعد بناء الاسم الكامل
     const nameParts = { firstName, fatherName, grandfatherName, familyName }

@@ -10,7 +10,8 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "ts-node prisma/seed.ts",
-    "platform:reset-password": "node scripts/reset-platform-password.cjs"
+    "platform:reset-password": "node scripts/reset-platform-password.cjs",
+    "employee:check": "node scripts/check-employee-login.cjs"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0"
