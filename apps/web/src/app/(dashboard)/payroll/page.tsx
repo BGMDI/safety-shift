@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
+import { Building2, CalendarDays, Download, Landmark, ShieldCheck, X } from 'lucide-react'
 
 interface PayrollRun {
   id: string; month: number; year: number; status: string; totalAmount: number; approvedAt: string | null
@@ -12,6 +13,7 @@ interface PayrollDetail {
   absenceDeduction: number; lateDeduction: number; netSalary: number; absentDays: number
   employee: { fullName: string; employeeCode: string; jobTitle: { name: string } | null }
 }
+interface BankOption { id: string; name: string; sarie: string }
 
 const STATUS: Record<string, { label: string; color: string }> = {
   DRAFT:    { label: 'مسودة', color: 'bg-gray-100 text-gray-700' },
@@ -28,9 +30,20 @@ export default function PayrollPage() {
   const [details, setDetails] = useState<PayrollDetail[]>([])
   const [form, setForm] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() })
   const [loading, setLoading] = useState(false)
+  const [banks, setBanks] = useState<BankOption[]>([])
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string[]>([])
+  const [bankForm, setBankForm] = useState({ bankId: '', employerIban: '', bankCustomerId: '', molEstablishmentId: '', valueDate: new Date().toISOString().slice(0, 10) })
 
   const loadRuns = () => api.get('/payroll').then(r => setRuns(r.data)).catch(() => {})
-  useEffect(() => { loadRuns() }, [])
+  useEffect(() => {
+    loadRuns()
+    api.get('/payroll/export/banks').then(r => {
+      setBanks(r.data)
+      setBankForm(value => ({ ...value, bankId: value.bankId || r.data[0]?.id || '' }))
+    }).catch(() => {})
+  }, [])
 
   const loadDetails = (id: string) => {
     setSelected(id)
@@ -61,10 +74,35 @@ export default function PayrollPage() {
   }
 
   const fmt = (n: number) => Number(n).toLocaleString('ar-SA', { minimumFractionDigits: 2 })
+  const selectedRun = runs.find(run => run.id === selected)
+
+  const exportBankFile = async () => {
+    if (!selected || exporting) return
+    setExporting(true); setExportError([])
+    try {
+      const response = await api.post(`/payroll/${selected}/export`, bankForm, { responseType: 'blob' })
+      const disposition = response.headers['content-disposition'] as string | undefined
+      const filename = disposition?.match(/filename="?([^";]+)"?/)?.[1] ?? 'payroll-wps.txt'
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url; link.download = filename; link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setExportOpen(false)
+    } catch (error: any) {
+      let payload: any = error.response?.data
+      if (payload instanceof Blob) {
+        try { payload = JSON.parse(await payload.text()) } catch { payload = null }
+      }
+      setExportError(payload?.message?.errors ?? payload?.errors ?? [typeof payload?.message === 'string' ? payload.message : 'تعذر إنشاء الملف البنكي'])
+    } finally { setExporting(false) }
+  }
 
   return (
     <div className="p-6 max-w-6xl">
-      <h1 className="text-2xl font-bold mb-6">مسير الرواتب</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div><h1 className="text-2xl font-bold">مسير الرواتب</h1><p className="text-sm text-gray-500 mt-1">احتساب واعتماد وتصدير الرواتب إلى البنك</p></div>
+        {selectedRun && ['APPROVED', 'PAID'].includes(selectedRun.status) ? <button onClick={() => { setExportError([]); setExportOpen(true) }} className="btn-primary"><Landmark size={17} /> تصدير للبنك</button> : null}
+      </div>
 
       <div className="grid grid-cols-3 gap-6">
         {/* Left panel: runs list */}
@@ -145,6 +183,31 @@ export default function PayrollPage() {
           )}
         </div>
       </div>
+
+      {exportOpen && selectedRun ? <div className="fixed inset-0 z-[80] bg-slate-950/55 backdrop-blur-sm p-4 grid place-items-center" onMouseDown={event => { if (event.currentTarget === event.target) setExportOpen(false) }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="bank-export-title" className="wardiya-section w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+          <header className="p-5 border-b flex items-start gap-3">
+            <span className="section-icon"><Landmark size={21} /></span>
+            <div className="flex-1"><h2 id="bank-export-title" className="font-extrabold text-lg">تصدير ملف البنك</h2><p className="text-xs text-gray-500 mt-1">مسير {MONTHS[selectedRun.month - 1]} {selectedRun.year} · {selectedRun._count.details} موظف · {fmt(selectedRun.totalAmount)} ر.س</p></div>
+            <button onClick={() => setExportOpen(false)} aria-label="إغلاق" className="w-9 h-9 grid place-items-center rounded-xl hover:bg-gray-100 text-gray-500"><X size={19} /></button>
+          </header>
+          <div className="p-6 space-y-5">
+            <div className="info-panel flex gap-3"><ShieldCheck size={20} className="text-green-600 shrink-0 mt-1" /><span>ينشئ النظام ملف WPS الرسمي بصيغة TXT ويفحص الهوية والآيبان وتطابق صافي الرواتب قبل التنزيل.</span></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="field-group md:col-span-2"><label>البنك الذي تُرفع إليه الرواتب <em>*</em></label><select value={bankForm.bankId} onChange={e => setBankForm(v => ({ ...v, bankId: e.target.value }))} className="w-full"><option value="">اختر البنك</option>{banks.map(bank => <option key={bank.id} value={bank.id}>{bank.name} ({bank.sarie})</option>)}</select></div>
+              <div className="field-group md:col-span-2"><label>آيبان حساب المنشأة المخصوم منه <em>*</em></label><div className="relative"><Building2 size={17} className="absolute right-4 top-3.5 text-gray-400" /><input dir="ltr" value={bankForm.employerIban} onChange={e => setBankForm(v => ({ ...v, employerIban: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))} maxLength={24} placeholder="SA0000000000000000000000" className="w-full pr-11 font-mono" /></div></div>
+              <div className="field-group"><label>رقم المنشأة لدى البنك <em>*</em></label><input inputMode="numeric" value={bankForm.bankCustomerId} onChange={e => setBankForm(v => ({ ...v, bankCustomerId: e.target.value.replace(/\D/g, '').slice(0, 10) }))} placeholder="رقم العميل أو المنشأة" className="w-full" /></div>
+              <div className="field-group"><label>رقم المنشأة بوزارة الموارد <em>*</em></label><input inputMode="numeric" value={bankForm.molEstablishmentId} onChange={e => setBankForm(v => ({ ...v, molEstablishmentId: e.target.value.replace(/\D/g, '').slice(0, 15) }))} placeholder="رقم مكتب العمل والمنشأة" className="w-full" /></div>
+              <div className="field-group md:col-span-2"><label>تاريخ تنفيذ الرواتب <em>*</em></label><div className="relative"><CalendarDays size={17} className="absolute right-4 top-3.5 text-gray-400" /><input type="date" min={new Date().toISOString().slice(0, 10)} value={bankForm.valueDate} onChange={e => setBankForm(v => ({ ...v, valueDate: e.target.value }))} className="w-full pr-11" /></div></div>
+            </div>
+            {exportError.length ? <div className="form-error"><strong className="block mb-2">تعذر إنشاء الملف:</strong><ul className="list-disc pr-5 space-y-1">{exportError.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul></div> : null}
+          </div>
+          <footer className="p-5 border-t flex flex-wrap justify-end gap-3 bg-gray-50/60">
+            <button onClick={() => setExportOpen(false)} className="btn-secondary">إلغاء</button>
+            <button onClick={exportBankFile} disabled={exporting || !bankForm.bankId || !bankForm.employerIban || !bankForm.bankCustomerId || !bankForm.molEstablishmentId || !bankForm.valueDate} className="btn-primary"><Download size={17} />{exporting ? 'جارٍ التحقق…' : 'تحقق وتنزيل الملف'}</button>
+          </footer>
+        </section>
+      </div> : null}
     </div>
   )
 }

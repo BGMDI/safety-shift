@@ -1,8 +1,26 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common'
 import { prisma } from '@shift-saas/database'
+import { BankExportInput, generateWpsFile, SAUDI_BANKS } from './payroll-export'
 
 @Injectable()
 export class PayrollService {
+  getExportBanks() { return SAUDI_BANKS.map(({ id, name, sarie }) => ({ id, name, sarie })) }
+
+  async exportRun(tenantId: string, id: string, input: BankExportInput) {
+    const run = await prisma.payrollRun.findFirst({
+      where: { tenantId, id },
+      include: { details: { include: { employee: { select: { fullName: true, nationalId: true, iban: true } } } } },
+    })
+    if (!run) throw new NotFoundException('مسير الرواتب غير موجود')
+    if (!['APPROVED', 'PAID'].includes(run.status)) throw new ConflictException('يجب اعتماد مسير الرواتب قبل تصديره للبنك')
+    return generateWpsFile(input, run.details.map(detail => ({
+      netSalary: Number(detail.netSalary), baseSalary: Number(detail.baseSalary), totalAllowances: Number(detail.totalAllowances),
+      housingAllowance: Number(detail.housingAllowance), otherEarnings: Number(detail.otherEarnings),
+      totalDeductions: Number(detail.totalDeductions), absenceDeduction: Number(detail.absenceDeduction), lateDeduction: Number(detail.lateDeduction),
+      employee: detail.employee,
+    })), { month: run.month, year: run.year })
+  }
+
   async getRuns(tenantId: string) {
     return prisma.payrollRun.findMany({
       where: { tenantId },
@@ -60,7 +78,10 @@ export class PayrollService {
     for (const emp of employees) {
       const base = emp.salaryComponents.find(c => c.type === 'BASE')
       const baseSalary = Number(base?.amount ?? 0)
-      const allowances = emp.salaryComponents.filter(c => c.type === 'ALLOWANCE').reduce((s, c) => s + Number(c.amount), 0)
+      const allowanceComponents = emp.salaryComponents.filter(c => c.type === 'ALLOWANCE')
+      const housingAllowance = allowanceComponents.filter(c => /سكن|housing/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
+      const otherEarnings = allowanceComponents.filter(c => !/سكن|housing/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
+      const allowances = housingAllowance + otherEarnings
       const deductions = emp.salaryComponents.filter(c => c.type === 'DEDUCTION').reduce((s, c) => s + Number(c.amount), 0)
 
       const attendanceLogs = await prisma.attendanceLog.findMany({
@@ -75,7 +96,7 @@ export class PayrollService {
       await prisma.payrollDetail.create({
         data: {
           payrollRunId: run.id, employeeId: emp.id,
-          baseSalary, totalAllowances: allowances, totalDeductions: deductions,
+          baseSalary, totalAllowances: allowances, housingAllowance, otherEarnings, totalDeductions: deductions,
           absenceDeduction, lateDeduction, netSalary: Math.max(0, netSalary),
           workingDays: workingDaysInMonth, absentDays,
         },

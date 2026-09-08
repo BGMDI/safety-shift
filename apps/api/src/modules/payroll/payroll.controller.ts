@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post, Put, StreamableFile, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
@@ -9,6 +9,7 @@ import { RequiresModule } from '../../common/decorators/requires-module.decorato
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { PayrollService } from './payroll.service'
 import { JwtPayload } from '@shift-saas/types'
+import { BankExportInput } from './payroll-export'
 
 @ApiTags('Payroll')
 @ApiBearerAuth()
@@ -24,6 +25,18 @@ export class PayrollController {
 
   @Get() @Roles('super_admin', 'hr_manager')
   getRuns(@CurrentUser() u: JwtPayload) { return this.svc.getRuns(u.tenantId) }
+
+  @Get('export/banks') @Roles('super_admin', 'hr_manager')
+  getExportBanks() { return this.svc.getExportBanks() }
+
+  @Post(':id/export') @Roles('super_admin', 'hr_manager')
+  async exportRun(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() body: BankExportInput) {
+    const file = await this.svc.exportRun(u.tenantId, id, body)
+    return new StreamableFile(file.buffer, {
+      type: 'text/plain; charset=utf-8',
+      disposition: `attachment; filename="${file.filename}"`,
+    })
+  }
 
   @Get(':id') @Roles('super_admin', 'hr_manager')
   getRun(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.svc.getRun(u.tenantId, id) }

@@ -1,0 +1,3 @@
+ALTER TABLE "payroll_details"
+ADD COLUMN "housingAllowance" DECIMAL(10,2) NOT NULL DEFAULT 0,
+ADD COLUMN "otherEarnings" DECIMAL(10,2) NOT NULL DEFAULT 0;

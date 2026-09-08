@@ -601,6 +601,8 @@ model PayrollDetail {
   employeeId       String
   baseSalary       Decimal @db.Decimal(10, 2)
   totalAllowances  Decimal @db.Decimal(10, 2)
+  housingAllowance Decimal @default(0) @db.Decimal(10, 2)
+  otherEarnings    Decimal @default(0) @db.Decimal(10, 2)
   totalDeductions  Decimal @db.Decimal(10, 2)
   absenceDeduction Decimal @db.Decimal(10, 2)
   lateDeduction    Decimal @db.Decimal(10, 2)
