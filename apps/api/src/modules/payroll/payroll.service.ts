@@ -16,6 +16,7 @@ export class PayrollService {
     return generateWpsFile(input, run.details.map(detail => ({
       netSalary: Number(detail.netSalary), baseSalary: Number(detail.baseSalary), totalAllowances: Number(detail.totalAllowances),
       housingAllowance: Number(detail.housingAllowance), otherEarnings: Number(detail.otherEarnings),
+      overtimeAmount: Number(detail.overtimeAmount),
       totalDeductions: Number(detail.totalDeductions), absenceDeduction: Number(detail.absenceDeduction), lateDeduction: Number(detail.lateDeduction),
       employee: detail.employee,
     })), { month: run.month, year: run.year })
@@ -80,9 +81,13 @@ export class PayrollService {
       const baseSalary = Number(base?.amount ?? 0)
       const allowanceComponents = emp.salaryComponents.filter(c => c.type === 'ALLOWANCE')
       const housingAllowance = allowanceComponents.filter(c => /سكن|housing/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
-      const otherEarnings = allowanceComponents.filter(c => !/سكن|housing/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
-      const allowances = housingAllowance + otherEarnings
-      const deductions = emp.salaryComponents.filter(c => c.type === 'DEDUCTION').reduce((s, c) => s + Number(c.amount), 0)
+      const bonusAmount = allowanceComponents.filter(c => /مكاف|bonus|reward/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
+      const regularAllowances = allowanceComponents.filter(c => !/سكن|housing|مكاف|bonus|reward/i.test(c.name))
+      const regularAllowanceTotal = regularAllowances.reduce((s, c) => s + Number(c.amount), 0)
+      const allowances = housingAllowance + regularAllowanceTotal + bonusAmount
+      const deductionComponents = emp.salaryComponents.filter(c => c.type === 'DEDUCTION')
+      const insuranceDeduction = deductionComponents.filter(c => /تأمين|gosi|insurance/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
+      const deductions = deductionComponents.reduce((s, c) => s + Number(c.amount), 0)
 
       const attendanceLogs = await prisma.attendanceLog.findMany({
         where: { tenantId, employeeId: emp.id, date: { gte: start, lte: end } },
@@ -91,12 +96,18 @@ export class PayrollService {
       const absenceDeduction = absentDays > 0 ? (baseSalary / workingDaysInMonth) * absentDays : 0
       const lateMinutes = attendanceLogs.reduce((s, l) => s + l.lateMinutes, 0)
       const lateDeduction = lateMinutes > 0 ? (baseSalary / workingDaysInMonth / 8 / 60) * lateMinutes : 0
-      const netSalary = baseSalary + allowances - deductions - absenceDeduction - lateDeduction
+      const overtimeMinutes = attendanceLogs.reduce((s, l) => s + l.overtimeMinutes, 0)
+      const actualHourlyRate = (baseSalary + allowances) / 30 / 8
+      const basicHourlyRate = baseSalary / 30 / 8
+      const overtimeAmount = overtimeMinutes > 0 ? (overtimeMinutes / 60) * (actualHourlyRate + basicHourlyRate * 0.5) : 0
+      const netSalary = baseSalary + allowances + overtimeAmount - deductions - absenceDeduction - lateDeduction
 
       await prisma.payrollDetail.create({
         data: {
           payrollRunId: run.id, employeeId: emp.id,
-          baseSalary, totalAllowances: allowances, housingAllowance, otherEarnings, totalDeductions: deductions,
+          baseSalary, totalAllowances: allowances, housingAllowance, otherEarnings: regularAllowanceTotal + bonusAmount,
+          allowanceBreakdown: allowanceComponents.map(component => ({ name: component.name, amount: Number(component.amount), category: /سكن|housing/i.test(component.name) ? 'HOUSING' : /مكاف|bonus|reward/i.test(component.name) ? 'BONUS' : 'ALLOWANCE' })),
+          bonusAmount, insuranceDeduction, overtimeMinutes, overtimeAmount, totalDeductions: deductions,
           absenceDeduction, lateDeduction, netSalary: Math.max(0, netSalary),
           workingDays: workingDaysInMonth, absentDays,
         },

@@ -1,0 +1,6 @@
+ALTER TABLE "payroll_details"
+ADD COLUMN "allowanceBreakdown" JSONB,
+ADD COLUMN "bonusAmount" DECIMAL(10,2) NOT NULL DEFAULT 0,
+ADD COLUMN "insuranceDeduction" DECIMAL(10,2) NOT NULL DEFAULT 0,
+ADD COLUMN "overtimeMinutes" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "overtimeAmount" DECIMAL(10,2) NOT NULL DEFAULT 0;

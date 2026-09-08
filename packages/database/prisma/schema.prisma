@@ -603,6 +603,11 @@ model PayrollDetail {
   totalAllowances  Decimal @db.Decimal(10, 2)
   housingAllowance Decimal @default(0) @db.Decimal(10, 2)
   otherEarnings    Decimal @default(0) @db.Decimal(10, 2)
+  allowanceBreakdown Json?
+  bonusAmount      Decimal @default(0) @db.Decimal(10, 2)
+  insuranceDeduction Decimal @default(0) @db.Decimal(10, 2)
+  overtimeMinutes  Int     @default(0)
+  overtimeAmount   Decimal @default(0) @db.Decimal(10, 2)
   totalDeductions  Decimal @db.Decimal(10, 2)
   absenceDeduction Decimal @db.Decimal(10, 2)
   lateDeduction    Decimal @db.Decimal(10, 2)

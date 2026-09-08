@@ -10,6 +10,8 @@ interface PayrollRun {
 }
 interface PayrollDetail {
   id: string; baseSalary: number; totalAllowances: number; totalDeductions: number
+  housingAllowance: number; allowanceBreakdown: { name: string; amount: number; category: string }[] | null
+  bonusAmount: number; insuranceDeduction: number; overtimeMinutes: number; overtimeAmount: number
   absenceDeduction: number; lateDeduction: number; netSalary: number; absentDays: number
   employee: { fullName: string; employeeCode: string; jobTitle: { name: string } | null }
 }
@@ -148,10 +150,10 @@ export default function PayrollPage() {
         {/* Right panel: details */}
         <div className="col-span-2">
           {selected && details.length > 0 ? (
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <table className="w-full text-xs">
+            <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+              <table className="w-full min-w-[1080px] text-xs">
                 <thead className="bg-gray-50 border-b">
-                  <tr>{['الموظف', 'الأساسي', 'البدلات', 'الحسميات', 'غياب', 'تأخير', 'الصافي'].map(h =>
+                  <tr>{['الموظف', 'الأساسي', 'تفصيل البدلات', 'عمل إضافي', 'مكافآت', 'التأمينات', 'خصم الغياب', 'حسميات أخرى', 'الصافي'].map(h =>
                     <th key={h} className="text-right px-3 py-2 font-medium text-gray-600">{h}</th>)}</tr>
                 </thead>
                 <tbody className="divide-y">
@@ -163,10 +165,14 @@ export default function PayrollPage() {
                         {d.employee.jobTitle && <p className="text-gray-400 text-xs">{d.employee.jobTitle.name}</p>}
                       </td>
                       <td className="px-3 py-2 font-mono">{fmt(d.baseSalary)}</td>
-                      <td className="px-3 py-2 font-mono text-green-600">{fmt(d.totalAllowances)}</td>
-                      <td className="px-3 py-2 font-mono text-red-500">{fmt(d.totalDeductions)}</td>
-                      <td className="px-3 py-2 font-mono text-red-500">{d.absentDays > 0 ? fmt(d.absenceDeduction) : '—'}</td>
-                      <td className="px-3 py-2 font-mono text-red-500">{Number(d.lateDeduction) > 0 ? fmt(d.lateDeduction) : '—'}</td>
+                      <td className="px-3 py-2 min-w-40">
+                        {d.allowanceBreakdown?.length ? <div className="space-y-1">{d.allowanceBreakdown.filter(item => item.category !== 'BONUS').map((item, index) => <div key={`${item.name}-${index}`} className="flex justify-between gap-3"><span className="text-gray-500">{item.name}</span><b className="font-mono text-green-600">{fmt(item.amount)}</b></div>)}</div> : <span className="font-mono text-green-600">{Number(d.totalAllowances) > 0 ? fmt(Number(d.totalAllowances) - Number(d.bonusAmount ?? 0)) : '—'}</span>}
+                      </td>
+                      <td className="px-3 py-2"><p className="font-mono text-green-600 font-bold">{Number(d.overtimeAmount) > 0 ? fmt(d.overtimeAmount) : '—'}</p>{d.overtimeMinutes > 0 ? <p className="text-gray-400 mt-1">{Math.floor(d.overtimeMinutes / 60)}س {d.overtimeMinutes % 60}د</p> : null}</td>
+                      <td className="px-3 py-2 font-mono text-green-600">{Number(d.bonusAmount) > 0 ? fmt(d.bonusAmount) : '—'}</td>
+                      <td className="px-3 py-2 font-mono text-red-500">{Number(d.insuranceDeduction) > 0 ? fmt(d.insuranceDeduction) : '—'}</td>
+                      <td className="px-3 py-2 font-mono text-red-500">{d.absentDays > 0 ? <><p>{fmt(d.absenceDeduction)}</p><p className="text-gray-400 mt-1">{d.absentDays} يوم</p></> : '—'}</td>
+                      <td className="px-3 py-2 font-mono text-red-500">{Number(d.totalDeductions) - Number(d.insuranceDeduction ?? 0) + Number(d.lateDeduction) > 0 ? fmt(Number(d.totalDeductions) - Number(d.insuranceDeduction ?? 0) + Number(d.lateDeduction)) : '—'}</td>
                       <td className="px-3 py-2 font-bold font-mono text-blue-700">{fmt(d.netSalary)}</td>
                     </tr>
                   ))}

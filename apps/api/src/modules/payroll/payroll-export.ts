@@ -32,6 +32,7 @@ export interface PayrollExportDetail {
   totalAllowances: number
   housingAllowance?: number
   otherEarnings?: number
+  overtimeAmount?: number
   totalDeductions: number
   absenceDeduction: number
   lateDeduction: number
@@ -78,7 +79,7 @@ export function generateWpsFile(input: BankExportInput, details: PayrollExportDe
     const storedOther = Number(detail.otherEarnings ?? 0)
     const hasBreakdown = Math.abs(storedHousing + storedOther - Number(detail.totalAllowances)) <= 0.01
     const housing = hasBreakdown ? storedHousing : 0
-    const otherEarnings = hasBreakdown ? storedOther : Number(detail.totalAllowances)
+    const otherEarnings = (hasBreakdown ? storedOther : Number(detail.totalAllowances)) + Number(detail.overtimeAmount ?? 0)
     const calculatedNet = Number(detail.baseSalary) + housing + otherEarnings - deductions
     if (Math.abs(calculatedNet - Number(detail.netSalary)) > 0.01) errors.push(`${detail.employee.fullName}: مكونات الراتب لا تساوي صافي الراتب`)
     return [
