@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
+import { OrganizationImport } from '../../../components/organization-import'
 
 /* ══════════════════════════════════════════
    أنواع البيانات
@@ -211,6 +212,8 @@ function OrgTab() {
 
   return (
     <div className="space-y-4">
+
+      <OrganizationImport onImported={load} />
 
       {/* شريط الإحصاء + زر إضافة فرع */}
       <div className="flex items-center justify-between">
