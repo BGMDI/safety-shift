@@ -190,6 +190,105 @@ body {
   .login-heading { text-align: center; }
 }
 
+/* ══════════════════════════════════════════
+   Wardiya platform owner area
+══════════════════════════════════════════ */
+.platform-shell { min-height: 100vh; display: flex; background: radial-gradient(circle at 85% -8%, color-mix(in srgb, var(--brand) 8%, transparent), transparent 25%), var(--ground); }
+.platform-sidebar { position: sticky; top: 0; z-index: 50; width: 262px; height: 100vh; flex: 0 0 262px; display: flex; flex-direction: column; color: #eef7ff; background: radial-gradient(circle at 10% 0, rgba(54,130,249,.32), transparent 31%), linear-gradient(175deg, #073652, #011f2a 58%, #011720); border-left: 1px solid rgba(101,184,255,.14); box-shadow: -12px 0 36px rgba(1,31,42,.12); }
+.platform-sidebar-head { min-height: 88px; padding: 17px 18px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.08); }
+.platform-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.platform-brand .wardiya-mark { width: 56px; height: 47px; flex: 0 0 auto; background-size: 143px 143px; background-position: -8px -30px; filter: drop-shadow(0 7px 10px rgba(0,0,0,.22)); }
+.platform-brand strong { display: block; color: #fff; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.platform-brand small { display: block; margin-top: 3px; color: rgba(224,240,251,.52); font-size: 9px; white-space: nowrap; }
+.platform-close { display: none; padding: 8px; color: #fff; border-radius: 10px; }
+.platform-owner-badge { margin: 14px 14px 5px; padding: 11px 12px; display: flex; align-items: center; gap: 10px; color: #65b8ff; border: 1px solid rgba(101,184,255,.14); border-radius: 12px; background: rgba(30,144,255,.09); }
+.platform-owner-badge b, .platform-owner-badge small { display: block; }
+.platform-owner-badge b { color: #eaf6ff; font-size: 11px; }
+.platform-owner-badge small { margin-top: 2px; color: rgba(224,240,251,.48); font-size: 8px; }
+.platform-sidebar nav { flex: 1; padding: 25px 12px; }
+.platform-sidebar nav > p { padding: 0 11px 8px; color: rgba(224,240,251,.36); font: 700 9px var(--font-latin), var(--font-arabic); letter-spacing: .08em; }
+.platform-sidebar nav a { position: relative; min-height: 43px; margin: 3px 0; padding: 9px 11px; display: flex; align-items: center; gap: 11px; color: rgba(235,247,255,.69); border-radius: 11px; font-size: 13px; font-weight: 500; transition: .16s; }
+.platform-sidebar nav a:hover { color: #fff; background: rgba(255,255,255,.06); transform: translateX(-2px); }
+.platform-sidebar nav a.is-active { color: #fff; font-weight: 700; background: linear-gradient(90deg, rgba(30,144,255,.24), rgba(54,130,249,.11)); box-shadow: inset 0 0 0 1px rgba(101,184,255,.12); }
+.platform-sidebar nav a.is-active svg { color: #65b8ff; }
+.platform-sidebar nav a i { position: absolute; right: 0; width: 3px; height: 22px; border-radius: 3px 0 0 3px; background: #65b8ff; box-shadow: 0 0 12px rgba(101,184,255,.65); }
+.platform-sidebar footer { padding: 13px 14px; display: flex; gap: 8px; border-top: 1px solid rgba(255,255,255,.08); }
+.platform-sidebar footer > button:last-child { min-height: 40px; padding: 0 12px; flex: 1; display: flex; align-items: center; gap: 9px; color: rgba(235,247,255,.62); border-radius: 11px; font-size: 12px; }
+.platform-sidebar footer > button:last-child:hover { color: #fff; background: rgba(255,255,255,.06); }
+.platform-theme, .platform-mobile-theme { width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto; color: #dbefff; border: 1px solid rgba(255,255,255,.1); border-radius: 11px; background: rgba(255,255,255,.05); }
+.platform-content { min-width: 0; flex: 1; position: relative; }
+.platform-content::before { content: ""; position: fixed; inset: 0 262px auto 0; z-index: 40; height: 3px; background: linear-gradient(90deg, #65b8ff, #3682f9 55%, #1e90ff); pointer-events: none; }
+.platform-mobile-bar, .platform-scrim { display: none; }
+
+/* Normalize every owner page while keeping its business logic intact. */
+.platform-content input, .platform-content select, .platform-content textarea { min-height: 42px; color: var(--ink) !important; border-color: var(--line-strong) !important; border-radius: 10px !important; background: var(--surface) !important; transition: border-color .18s, box-shadow .18s; }
+.platform-content input:focus, .platform-content select:focus, .platform-content textarea:focus { outline: 0; border-color: var(--brand) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent); }
+.platform-content button:focus-visible, .platform-content a:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand) 28%, transparent); outline-offset: 2px; }
+.platform-content .rounded-2xl { border-color: var(--line) !important; }
+.platform-content .shadow-sm { box-shadow: var(--shadow) !important; }
+.platform-content table { border-collapse: separate; border-spacing: 0; }
+.platform-content thead { background: var(--surface-2) !important; }
+.platform-content tbody tr { transition: background .15s; }
+.platform-content tbody tr:hover { background: color-mix(in srgb, var(--brand-soft) 42%, transparent) !important; }
+
+/* Owner login — same brand, deliberately stronger security posture. */
+.platform-login { min-height: 100vh; display: grid; grid-template-columns: minmax(430px,.92fr) minmax(520px,1.08fr); direction: ltr; background: #f6f9fc; }
+.platform-login-brand { min-height: 100vh; position: relative; overflow: hidden; display: grid; place-items: center; direction: rtl; color: #fff; background: radial-gradient(circle at 26% 20%, rgba(101,184,255,.28), transparent 24%), linear-gradient(145deg, #073652, #011f2a 56%, #011720); }
+.platform-login-brand::before, .platform-login-brand::after { content: ""; position: absolute; border: 1px solid rgba(101,184,255,.1); border-radius: 50%; }
+.platform-login-brand::before { width: 510px; height: 510px; top: -250px; right: -220px; }
+.platform-login-brand::after { width: 730px; height: 730px; top: -360px; right: -330px; }
+.platform-brand-content { width: min(470px,78%); position: relative; z-index: 2; }
+.platform-hero-mark { width: 158px; height: 125px; margin-right: -10px; background-size: 404px 404px; background-position: -23px -86px; filter: drop-shadow(0 18px 24px rgba(0,0,0,.25)); }
+.platform-kicker { margin-top: 25px; color: #65b8ff; font: 700 10px var(--font-latin), sans-serif; letter-spacing: .24em; direction: ltr; text-align: right; }
+.platform-brand-content h1 { margin-top: 18px; font-size: clamp(42px,5.1vw,70px); line-height: 1.08; font-weight: 800; letter-spacing: -.055em; }
+.platform-brand-content h1 span { color: #65b8ff; }
+.platform-brand-content > p:not(.platform-kicker) { max-width: 410px; margin-top: 22px; color: rgba(236,247,255,.67); font-size: 15px; line-height: 1.9; }
+.platform-security-note { width: fit-content; margin-top: 38px; padding: 11px 13px; display: flex; align-items: center; gap: 10px; color: #65b8ff; border: 1px solid rgba(101,184,255,.16); border-radius: 12px; background: rgba(101,184,255,.07); }
+.platform-security-note b, .platform-security-note small { display: block; }
+.platform-security-note b { color: #edf8ff; font-size: 11px; }
+.platform-security-note small { margin-top: 2px; color: rgba(236,247,255,.5); font-size: 9px; }
+.platform-login-panel { min-height: 100vh; padding: 48px; display: grid; place-items: center; direction: rtl; background: radial-gradient(circle at 100% 0, rgba(101,184,255,.1), transparent 28%), #f6f9fc; }
+.platform-login-card { width: min(440px,100%); }
+.platform-login-mobile-brand { display: none; }
+.platform-login-eyebrow { display: inline-flex; align-items: center; gap: 6px; color: #1e90ff; font-size: 11px; font-weight: 800; }
+.platform-login-card h2 { margin-top: 11px; color: #011f2a; font-size: 31px; font-weight: 800; letter-spacing: -.03em; }
+.platform-login-intro { margin: 7px 0 31px; color: #718493; font-size: 13px; }
+.platform-login-card form label { display: block; margin: 17px 0 8px; color: #314957; font-size: 12px; font-weight: 700; }
+.platform-login-input { min-height: 50px; padding: 0 15px; display: flex; align-items: center; gap: 11px; color: #7790a0; border: 1px solid #dce6ee; border-radius: 13px; background: #fff; transition: .18s; }
+.platform-login-input:focus-within { color: #1e90ff; border-color: #1e90ff; box-shadow: 0 0 0 4px rgba(30,144,255,.11); }
+.platform-login-input input { width: 100%; height: 48px; direction: ltr; color: #011f2a; border: 0; outline: 0; background: transparent; font: 500 13px var(--font-latin),var(--font-arabic),sans-serif; }
+.platform-login-error { margin-top: 12px; padding: 10px 12px; color: #b4233b; border: 1px solid #f1c9d0; border-radius: 10px; background: #fff1f3; font-size: 11px; }
+.platform-login-card form > button { width: 100%; min-height: 50px; margin-top: 22px; padding: 0 18px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #fff; border-radius: 13px; background: linear-gradient(105deg,#1e90ff,#1253c9); box-shadow: 0 13px 28px -15px rgba(18,83,201,.72); font-size: 13px; font-weight: 800; transition: .18s; }
+.platform-login-card form > button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 17px 32px -15px rgba(18,83,201,.85); }
+.platform-login-card form > button:disabled { opacity: .58; }
+.platform-login-footnote { margin-top: 26px; color: #91a0ac; font-size: 10px; text-align: center; }
+
+@media (max-width: 900px) {
+  .platform-login { grid-template-columns: 1fr; }
+  .platform-login-brand { display: none; }
+  .platform-login-panel { padding: 28px 20px; }
+  .platform-login-mobile-brand { margin-bottom: 32px; display: flex; align-items: center; justify-content: center; gap: 9px; }
+  .platform-login-mobile-brand .wardiya-mark { width: 62px; height: 51px; background-size: 159px 159px; background-position: -9px -34px; }
+  .platform-login-mobile-brand strong { color: #011f2a; font-size: 19px; font-weight: 800; }
+  .platform-login-card { text-align: center; }
+  .platform-login-card form { text-align: right; }
+}
+
+@media (max-width: 767px) {
+  .platform-shell { display: block; padding-top: 64px; }
+  .platform-mobile-bar { position: fixed; inset: 0 0 auto; z-index: 45; height: 64px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; background: rgba(1,31,42,.96); border-bottom: 1px solid rgba(101,184,255,.16); backdrop-filter: blur(16px); }
+  .platform-mobile-bar > button, .platform-mobile-theme { width: 39px; height: 39px; display: grid; place-items: center; color: #eff8ff; border: 1px solid rgba(255,255,255,.1); border-radius: 11px; background: rgba(255,255,255,.05); }
+  .platform-brand.is-compact .wardiya-mark { width: 43px; height: 37px; background-size: 111px 111px; background-position: -6px -24px; }
+  .platform-brand.is-compact strong { font-size: 15px; }
+  .platform-sidebar { position: fixed; inset: 0 auto 0 0; width: min(86vw,292px); transform: translateX(-105%); transition: transform .25s cubic-bezier(.2,.7,.2,1); box-shadow: 20px 0 60px rgba(1,17,25,.35); }
+  .platform-sidebar.is-open { transform: translateX(0); }
+  .platform-close { display: grid; place-items: center; }
+  .platform-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: rgba(1,20,29,.55); backdrop-filter: blur(3px); }
+  .platform-content::before { inset-inline: 0; }
+  .platform-content > div { padding: 16px !important; }
+  .platform-content table { min-width: 720px; }
+}
+
 /* ── Wardiya navigation ── */
 .ops-sidebar {
   width: 272px; height: 100vh; position: sticky; top: 0; z-index: 50; flex: 0 0 272px;

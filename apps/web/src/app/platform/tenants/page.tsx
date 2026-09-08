@@ -189,24 +189,20 @@ export default function PlatformTenantsPage() {
     } catch (e: any) { alert(e.response?.data?.message ?? 'خطأ') }
   }
 
-  const logout = () => { localStorage.removeItem('platform_access_token'); router.push('/platform/login') }
-
   if (loading) return <div className="p-6 text-center" style={{ color: 'var(--ink-3)' }}>جارٍ التحميل...</div>
 
   return (
     <div className="p-6 max-w-5xl mx-auto" dir="rtl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-xs font-bold tracking-wide uppercase" style={{ color: 'var(--brand)' }}>لوحة مالك المنصة</p>
+          <p className="text-xs font-bold tracking-wide" style={{ color: 'var(--brand)' }}>مركز قيادة وردية</p>
           <h1 className="text-2xl font-extrabold" style={{ color: 'var(--ink)' }}>الشركات المشتركة</h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--ink-3)' }}>إدارة الاشتراكات والوحدات وحسابات الشركات</p>
         </div>
         <div className="flex items-center gap-2">
-          <a href="/platform/dashboard" className="text-sm px-4 py-2 rounded-lg" style={{ color: 'var(--brand)' }}>📊 الداشبورد</a>
-          <a href="/platform/plans" className="text-sm px-4 py-2 rounded-lg" style={{ color: 'var(--brand)' }}>📋 خطط الاشتراك</a>
           <button onClick={() => setShowCreate(v => !v)} className="text-sm font-semibold text-white px-4 py-2 rounded-lg" style={{ background: 'var(--brand)' }}>
             {showCreate ? '✕ إلغاء' : '+ شركة جديدة'}
           </button>
-          <button onClick={logout} className="text-sm px-3 py-2 rounded-lg" style={{ color: 'var(--ink-3)' }}>خروج</button>
         </div>
       </div>
 

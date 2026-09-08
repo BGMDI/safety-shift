@@ -65,10 +65,10 @@ export default function PlatformDashboardPage() {
     <div className="p-6 max-w-6xl mx-auto" dir="rtl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <a href="/platform/tenants" className="text-xs" style={{ color: 'var(--brand)' }}>← الشركات المشتركة</a>
-          <h1 className="text-2xl font-extrabold mt-1" style={{ color: 'var(--ink)' }}>📊 داشبورد الاشتراكات والمقاعد</h1>
+          <p className="text-xs font-bold tracking-wide" style={{ color: 'var(--brand)' }}>مركز قيادة وردية</p>
+          <h1 className="text-2xl font-extrabold mt-1" style={{ color: 'var(--ink)' }}>الاشتراكات والمقاعد</h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--ink-3)' }}>صورة تشغيلية لجميع الشركات على المنصة</p>
         </div>
-        <a href="/platform/plans" className="text-sm px-4 py-2 rounded-lg" style={{ color: 'var(--brand)' }}>📋 خطط الاشتراك</a>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
