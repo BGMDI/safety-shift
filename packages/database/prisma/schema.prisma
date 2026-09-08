@@ -15,6 +15,10 @@ model Tenant {
   id                String           @id @default(uuid())
   name              String
   logo              String?
+  salaryCertificateText     String?          @db.Text
+  employmentCertificateText String?          @db.Text
+  certificateSignature      String?
+  certificateStamp          String?
   plan              SubscriptionPlan @default(TRIAL)
   planStatus        PlanStatus       @default(TRIAL)
   stripeCustomerId  String?          @unique

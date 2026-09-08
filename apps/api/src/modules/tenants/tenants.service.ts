@@ -3,6 +3,11 @@ import { prisma } from '@shift-saas/database'
 
 @Injectable()
 export class TenantsService {
+  private readonly certificateSelect = {
+    id: true, name: true, logo: true,
+    salaryCertificateText: true, employmentCertificateText: true,
+    certificateSignature: true, certificateStamp: true,
+  }
   /** بيانات عرض الشركة الأساسية لأي موظف مسجّل دخول — الاسم والشعار فقط */
   async getMine(tenantId: string) {
     const tenant = await prisma.tenant.findUnique({
@@ -11,5 +16,32 @@ export class TenantsService {
     })
     if (!tenant) throw new NotFoundException('الشركة غير موجودة')
     return tenant
+  }
+
+  async getCertificateSettings(tenantId: string) {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: this.certificateSelect })
+    if (!tenant) throw new NotFoundException('الشركة غير موجودة')
+    return tenant
+  }
+
+  async updateCertificateSettings(tenantId: string, data: { salaryCertificateText?: string; employmentCertificateText?: string }) {
+    await this.getCertificateSettings(tenantId)
+    return prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        salaryCertificateText: data.salaryCertificateText?.trim() || null,
+        employmentCertificateText: data.employmentCertificateText?.trim() || null,
+      },
+      select: this.certificateSelect,
+    })
+  }
+
+  async updateCertificateAsset(tenantId: string, kind: 'signature' | 'stamp', url: string) {
+    await this.getCertificateSettings(tenantId)
+    return prisma.tenant.update({
+      where: { id: tenantId },
+      data: kind === 'signature' ? { certificateSignature: url } : { certificateStamp: url },
+      select: this.certificateSelect,
+    })
   }
 }

@@ -10,6 +10,20 @@ interface SalaryData {
   summary: { base: number; allowances: number; deductions: number; net: number }
 }
 
+type CertificateType = 'salary' | 'employment'
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').replace(/\/$/, '')
+const DEFAULT_SALARY_TEXT = 'تشهد {اسم_الشركة} بأن الموظف/ة {اسم_الموظف}، رقم وظيفي {الرقم_الوظيفي}، يعمل لدينا بمسمى {المسمى_الوظيفي} منذ تاريخ {تاريخ_التعيين}، ويتقاضى راتباً شهرياً موضحاً أدناه. وقد أُعطي هذا التعريف بناءً على طلبه دون أدنى مسؤولية على الشركة.'
+const DEFAULT_EMPLOYMENT_TEXT = 'تشهد {اسم_الشركة} بأن الموظف/ة {اسم_الموظف}، رقم وظيفي {الرقم_الوظيفي}، يعمل لدينا بمسمى {المسمى_الوظيفي} في قسم {القسم} منذ تاريخ {تاريخ_التعيين}. وقد أُعطي هذا التعريف بناءً على طلبه دون أدنى مسؤولية على الشركة.'
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]!)
+}
+
+function assetUrl(path?: string | null) {
+  if (!path) return ''
+  return /^\/uploads\/[a-zA-Z0-9/_\-.]+$/.test(path) ? `${API_URL}${path}` : ''
+}
+
 const TYPE_MAP: Record<string, { label: string; color: string }> = {
   BASE:      { label: 'راتب أساسي', color: 'bg-blue-100 text-blue-700' },
   ALLOWANCE: { label: 'بدل',        color: 'bg-green-100 text-green-700' },
@@ -24,6 +38,10 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
   const [form, setForm] = useState({ type: 'ALLOWANCE', name: '', amount: '', effectiveDate: new Date().toISOString().split('T')[0] })
   const [loading, setLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [showCertificate, setShowCertificate] = useState(false)
+  const [certificateType, setCertificateType] = useState<CertificateType>('salary')
+  const [recipient, setRecipient] = useState('')
+  const [certificateLoading, setCertificateLoading] = useState(false)
 
   const load = () => {
     api.get(`/salary/employee/${id}`).then(r => setData(r.data)).catch(() => {})
@@ -49,40 +67,55 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
   }
 
   const printCertificate = async () => {
+    if (!recipient.trim()) return
+    setCertificateLoading(true)
     try {
       const r = await api.get(`/salary/employee/${id}/certificate`)
       const cert = r.data
-      const win = window.open('', '_blank')!
+      const template = certificateType === 'salary'
+        ? cert.tenant?.salaryCertificateText || DEFAULT_SALARY_TEXT
+        : cert.tenant?.employmentCertificateText || DEFAULT_EMPLOYMENT_TEXT
+      const fields: Record<string, string> = {
+        '{اسم_الشركة}': cert.tenant?.name ?? 'الشركة', '{اسم_الموظف}': cert.employee?.fullName,
+        '{الرقم_الوظيفي}': cert.employee?.employeeCode, '{رقم_الهوية}': cert.employee?.nationalId ?? '—',
+        '{الجنسية}': cert.employee?.nationality ?? '—', '{المسمى_الوظيفي}': cert.employee?.jobTitle?.name ?? '—',
+        '{القسم}': cert.employee?.department?.name ?? '—', '{الفرع}': cert.employee?.branch?.name ?? '—',
+        '{تاريخ_التعيين}': cert.employee?.hireDate ? new Date(cert.employee.hireDate).toLocaleDateString('ar-SA') : '—',
+        '{تاريخ_الإصدار}': new Date().toLocaleDateString('ar-SA'), '{الجهة}': recipient.trim(),
+      }
+      let body = escapeHtml(template)
+      for (const [key, value] of Object.entries(fields)) body = body.replaceAll(key, escapeHtml(value))
+      body = body.replace(/\r?\n/g, '<br>')
+      const logo = assetUrl(cert.tenant?.logo)
+      const signature = assetUrl(cert.tenant?.certificateSignature)
+      const stamp = assetUrl(cert.tenant?.certificateStamp)
+      const win = window.open('', '_blank')
+      if (!win) throw new Error('popup blocked')
       win.document.write(`
         <!DOCTYPE html><html lang="ar" dir="rtl">
-        <head><meta charset="UTF-8"><title>تعريف بالراتب</title>
-        <style>body{font-family:Arial;padding:40px;direction:rtl;} h1{text-align:center;} .info{margin:20px 0;} table{width:100%;border-collapse:collapse;} td,th{border:1px solid #ccc;padding:8px;text-align:right;} .total{font-weight:bold;background:#f0f0f0;} .sig{margin-top:60px;display:flex;justify-content:space-between;}</style>
+        <head><meta charset="UTF-8"><title>${certificateType === 'salary' ? 'تعريف بالراتب' : 'تعريف موظف'}</title>
+        <style>@page{size:A4;margin:18mm}*{box-sizing:border-box}body{font-family:Arial;color:#0b2135;direction:rtl;margin:0}.head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1e90ff;padding-bottom:18px}.head img{width:100px;height:70px;object-fit:contain}.company{font-size:22px;font-weight:bold}.ref{font-size:12px;color:#64748b;line-height:1.8}.title{text-align:center;margin:42px 0 8px;font-size:25px}.to{text-align:center;color:#334155;margin-bottom:34px}.body{font-size:16px;line-height:2.25;text-align:justify;min-height:180px}table{width:100%;border-collapse:collapse;margin:24px 0}td,th{border:1px solid #cbd5e1;padding:10px;text-align:right}.total{font-weight:bold;background:#eff6ff}.approval{margin-top:55px;display:flex;justify-content:flex-end}.approval-box{text-align:center;min-width:260px}.assets{height:105px;display:flex;align-items:center;justify-content:center;gap:5px}.assets img{max-width:125px;max-height:100px;object-fit:contain}.footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #cbd5e1;padding-top:8px;text-align:center;font-size:10px;color:#64748b}</style>
         </head><body>
-        <h1>شهادة راتب</h1>
-        <div class="info">
-          <p><strong>اسم الموظف:</strong> ${cert.employee?.fullName}</p>
-          <p><strong>رقم الموظف:</strong> ${cert.employee?.employeeCode}</p>
-          <p><strong>الوظيفة:</strong> ${cert.employee?.jobTitle?.name ?? '—'}</p>
-          <p><strong>القسم:</strong> ${cert.employee?.department?.name ?? '—'}</p>
-          <p><strong>تاريخ الالتحاق:</strong> ${cert.employee?.hireDate ? new Date(cert.employee.hireDate).toLocaleDateString('ar-SA') : '—'}</p>
-          <p><strong>تاريخ الإصدار:</strong> ${new Date().toLocaleDateString('ar-SA')}</p>
-        </div>
-        <table>
+        <header class="head"><div><div class="company">${escapeHtml(cert.tenant?.name ?? 'الشركة')}</div><div class="ref">التاريخ: ${new Date().toLocaleDateString('ar-SA')}<br>الرقم الوظيفي: ${escapeHtml(cert.employee?.employeeCode)}</div></div>${logo ? `<img src="${escapeHtml(logo)}" alt="شعار الشركة">` : ''}</header>
+        <h1 class="title">${certificateType === 'salary' ? 'تعريف بالراتب' : 'تعريف موظف'}</h1>
+        <p class="to">إلى: <strong>${escapeHtml(recipient.trim())}</strong></p>
+        <div class="body">${body}</div>
+        ${certificateType === 'salary' ? `<table>
           <thead><tr><th>المكوّن</th><th>النوع</th><th>المبلغ</th></tr></thead>
           <tbody>
-            ${(cert.components || []).map((c: any) => `<tr><td>${c.name}</td><td>${c.type === 'BASE' ? 'أساسي' : c.type === 'ALLOWANCE' ? 'بدل' : 'حسم'}</td><td>${Number(c.amount).toLocaleString('ar-SA')} ر.س</td></tr>`).join('')}
+            ${(cert.components || []).map((c: any) => `<tr><td>${escapeHtml(c.name)}</td><td>${c.type === 'BASE' ? 'أساسي' : c.type === 'ALLOWANCE' ? 'بدل' : 'حسم'}</td><td>${Number(c.amount).toLocaleString('ar-SA')} ر.س</td></tr>`).join('')}
             <tr class="total"><td colspan="2">الراتب الصافي</td><td>${Number(cert.summary?.net ?? 0).toLocaleString('ar-SA')} ر.س</td></tr>
           </tbody>
-        </table>
-        <div class="sig">
-          <div><p>توقيع الموظف: ______________</p></div>
-          <div><p>توقيع المدير: ______________</p><p>الختم الرسمي</p></div>
-        </div>
+        </table>` : ''}
+        <div class="approval"><div class="approval-box"><strong>إدارة شؤون الموظفين</strong><div class="assets">${signature ? `<img src="${escapeHtml(signature)}" alt="التوقيع">` : ''}${stamp ? `<img src="${escapeHtml(stamp)}" alt="الختم">` : ''}</div></div></div>
+        <footer class="footer">صدر هذا التعريف إلكترونياً من نظام وردية لصالح ${escapeHtml(cert.tenant?.name ?? 'الشركة')}</footer>
         </body></html>
       `)
       win.document.close()
-      win.print()
+      window.setTimeout(() => win.print(), 500)
+      setShowCertificate(false)
     } catch { alert('تعذّر تحميل بيانات الشهادة') }
+    finally { setCertificateLoading(false) }
   }
 
   const printJobCard = () => {
@@ -137,8 +170,8 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
 
       {/* Actions */}
       <div className="flex gap-3 mb-6">
-        <button onClick={printCertificate} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2">
-          🖨️ طباعة تعريف بالراتب
+        <button onClick={() => setShowCertificate(true)} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2">
+          🖨️ إصدار تعريف
         </button>
         <button onClick={printJobCard} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2">
           🪪 طباعة البطاقة الوظيفية
@@ -147,6 +180,20 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
           + إضافة مكوّن
         </button>
       </div>
+
+      {showCertificate ? <div className="fixed inset-0 z-50 bg-slate-950/50 grid place-items-center p-4" role="dialog" aria-modal="true" aria-labelledby="certificate-title">
+        <section className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+          <h2 id="certificate-title" className="text-xl font-black mb-1">إصدار تعريف رسمي</h2>
+          <p className="text-sm text-gray-500 mb-5">اختر نوع الخطاب وحدد الجهة الموجه لها قبل الطباعة.</p>
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <button type="button" onClick={() => setCertificateType('salary')} className={`border rounded-xl p-4 text-right ${certificateType === 'salary' ? 'border-blue-600 bg-blue-50 text-blue-800' : ''}`}><strong className="block">تعريف بالراتب</strong><span className="text-xs">يتضمن تفاصيل الراتب والصافي</span></button>
+            <button type="button" onClick={() => setCertificateType('employment')} className={`border rounded-xl p-4 text-right ${certificateType === 'employment' ? 'border-blue-600 bg-blue-50 text-blue-800' : ''}`}><strong className="block">تعريف بدون راتب</strong><span className="text-xs">يثبت العمل والمسمى فقط</span></button>
+          </div>
+          <label className="block text-sm font-bold mb-2" htmlFor="certificate-recipient">الجهة الموجه لها التعريف *</label>
+          <input id="certificate-recipient" autoFocus maxLength={150} value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="مثال: إلى من يهمه الأمر، البنك الأهلي…" className="w-full border rounded-xl px-4 py-3 mb-5 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          <div className="flex gap-3 justify-end"><button type="button" onClick={() => setShowCertificate(false)} className="px-4 py-2 text-gray-600">إلغاء</button><button type="button" onClick={printCertificate} disabled={!recipient.trim() || certificateLoading} className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold disabled:opacity-40">{certificateLoading ? 'جارٍ التجهيز…' : 'معاينة وطباعة'}</button></div>
+        </section>
+      </div> : null}
 
       {/* Add component form */}
       {showForm && (

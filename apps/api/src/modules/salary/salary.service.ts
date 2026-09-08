@@ -55,11 +55,17 @@ export class SalaryService {
   }
 
   async getSalaryCertificate(tenantId: string, employeeId: string) {
-    const data = await this.getEmployeeSalary(tenantId, employeeId)
-    const employee = await prisma.employee.findFirst({
-      where: { id: employeeId, tenantId },
-      include: { branch: true, department: true, jobTitle: true },
-    })
-    return { ...data, employee, issuedAt: new Date().toISOString() }
+    const [data, employee, tenant] = await Promise.all([
+      this.getEmployeeSalary(tenantId, employeeId),
+      prisma.employee.findFirst({ where: { id: employeeId, tenantId }, include: { branch: true, department: true, jobTitle: true } }),
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          name: true, logo: true, salaryCertificateText: true, employmentCertificateText: true,
+          certificateSignature: true, certificateStamp: true,
+        },
+      }),
+    ])
+    return { ...data, employee, tenant, issuedAt: new Date().toISOString() }
   }
 }
