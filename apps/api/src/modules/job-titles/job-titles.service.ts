@@ -1,9 +1,31 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { prisma } from '@shift-saas/database'
 import { CreateJobTitleDto, UpdateJobTitleDto } from './dto/job-title.dto'
+import { parseJobTitles } from './job-titles-import'
 
 @Injectable()
 export class JobTitlesService {
+  async import(tenantId: string, buffer: Buffer) {
+    const rows = await parseJobTitles(buffer)
+    const errors = rows.filter(row => row.errors.length).map(row => ({ row: row.row, message: row.errors.join('، ') }))
+    const valid = rows.filter(row => !row.errors.length)
+    const existing = await prisma.jobTitle.findMany({ where: { tenantId }, select: { name: true } })
+    const names = new Set(existing.map(item => item.name.trim().toLocaleLowerCase('ar')))
+    const additions: typeof valid = []
+    const skippedRows: { row: number; message: string }[] = []
+    for (const row of valid) {
+      const key = row.name.trim().toLocaleLowerCase('ar')
+      if (names.has(key)) skippedRows.push({ row: row.row, message: `المسمى «${row.name}» موجود مسبقاً` })
+      else { names.add(key); additions.push(row) }
+    }
+    if (additions.length) {
+      await prisma.jobTitle.createMany({ data: additions.map(row => ({
+        tenantId, name: row.name.trim(), grade: row.grade.trim(), baseSalary: row.baseSalary!, isShiftEligible: row.isShiftEligible!,
+      })) })
+    }
+    return { total: rows.length, added: additions.length, rejected: errors.length, skipped: skippedRows.length, errors, skippedRows }
+  }
+
   async findAll(tenantId: string) {
     return prisma.jobTitle.findMany({
       where: { tenantId },

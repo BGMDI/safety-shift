@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
 import { OrganizationImport } from '../../../components/organization-import'
+import { JobTitlesImport } from '../../../components/job-titles-import'
 
 /* ══════════════════════════════════════════
    أنواع البيانات
@@ -470,23 +471,25 @@ function JobsTab() {
   return (
     <div className="space-y-5">
 
+      <JobTitlesImport onImported={load} />
+
       {/* نموذج إضافة وظيفة */}
-      <div className="bg-white rounded-xl shadow-sm p-5">
-        <h2 className="font-semibold text-gray-700 mb-4">إضافة مسمى وظيفي جديد</h2>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">المسمى الوظيفي *</label>
+      <div className="wardiya-section p-6">
+        <div className="section-heading"><div><span>إضافة فردية</span><h2>مسمى وظيفي جديد</h2></div></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="field-group">
+            <label>المسمى الوظيفي <em>*</em></label>
             <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && create()}
               placeholder="مدير، محاسب، مهندس..." className={inp} />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">الدرجة الوظيفية</label>
+          <div className="field-group">
+            <label>الدرجة الوظيفية</label>
             <input value={form.grade} onChange={e => setForm(p => ({ ...p, grade: e.target.value }))}
               placeholder="أولى، ثانية، A1..." className={inp} />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">الراتب الأساسي (ر.س)</label>
+          <div className="field-group">
+            <label>الراتب الأساسي (ر.س)</label>
             <input value={form.baseSalary} onChange={e => setForm(p => ({ ...p, baseSalary: e.target.value }))}
               type="number" min="0" placeholder="0" className={inp} />
           </div>
@@ -496,8 +499,7 @@ function JobsTab() {
             onChange={e => setForm(p => ({ ...p, isShiftEligible: e.target.checked }))} />
           تدخل في جدولة الشفتات (فعّلها للوظائف الميدانية مثل حارس أمن، مراقب أمن — عطّلها للوظائف الإدارية)
         </label>
-        <button onClick={create} disabled={saving || !form.name.trim()}
-          className="mt-3 bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+        <button onClick={create} disabled={saving || !form.name.trim()} className="btn-primary mt-5">
           {saving ? '⏳ جارٍ...' : '+ إضافة مسمى وظيفي'}
         </button>
       </div>

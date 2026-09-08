@@ -134,6 +134,75 @@ body {
 .app-main button:focus-visible, .app-main a:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--brand) 30%, transparent); outline-offset: 2px;
 }
+
+/* ── Wardiya form language: shared across operational pages ── */
+.app-main .wardiya-section, .platform-content .wardiya-section {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+.app-main .section-heading, .platform-content .section-heading {
+  margin-bottom: 20px; padding-bottom: 15px; display: flex; align-items: center;
+  justify-content: space-between; border-bottom: 1px solid var(--line);
+}
+.section-heading span { display: block; margin-bottom: 3px; color: var(--brand); font-size: 10px; font-weight: 800; }
+.section-heading h2 { color: var(--ink); font-size: 16px; font-weight: 800; }
+.field-group > label, .app-main form label:not(.file-picker), .platform-content form label:not(.file-picker) {
+  display: block; margin-bottom: 7px; color: var(--ink-2); font-size: 12px; font-weight: 700;
+}
+.field-group > label em { color: var(--crit); font-style: normal; }
+.app-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.app-main select, .app-main textarea,
+.platform-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.platform-content select, .platform-content textarea {
+  min-height: 46px; padding-inline: 14px; border-width: 1px !important; border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(1,31,42,.025); font-size: 13px;
+}
+.app-main textarea, .platform-content textarea { padding-block: 11px; }
+.app-main select, .platform-content select { cursor: pointer; }
+.app-main input:disabled, .app-main select:disabled, .app-main textarea:disabled,
+.platform-content input:disabled, .platform-content select:disabled, .platform-content textarea:disabled {
+  cursor: not-allowed; opacity: .62; background: var(--surface-2) !important;
+}
+.app-main .btn-primary, .platform-content .btn-primary,
+.app-main .btn-secondary, .platform-content .btn-secondary,
+.app-main .btn-danger, .platform-content .btn-danger {
+  min-height: 44px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; border-radius: 12px; font-size: 13px; font-weight: 800; transition: transform .16s, box-shadow .16s, background .16s;
+}
+.app-main .btn-primary, .platform-content .btn-primary {
+  color: #fff; background: linear-gradient(105deg, var(--brand), var(--brand-2));
+  box-shadow: 0 10px 22px -13px color-mix(in srgb, var(--brand-2) 80%, transparent);
+}
+.app-main .btn-primary:hover:not(:disabled), .platform-content .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-lift); }
+.app-main .btn-secondary, .platform-content .btn-secondary { color: var(--brand-2); border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--line)); background: var(--surface); }
+.app-main .btn-secondary:hover:not(:disabled), .platform-content .btn-secondary:hover:not(:disabled) { background: var(--brand-soft); }
+.app-main .btn-primary:disabled, .app-main .btn-secondary:disabled, .platform-content .btn-primary:disabled, .platform-content .btn-secondary:disabled { opacity: .45; cursor: not-allowed; }
+.section-trigger { width: 100%; min-height: 78px; padding: 15px 18px; display: flex; align-items: center; gap: 13px; text-align: right; transition: background .16s; }
+.section-trigger:hover { background: color-mix(in srgb, var(--brand-soft) 34%, transparent); }
+.section-trigger strong, .section-trigger small { display: block; }
+.section-trigger strong { color: var(--ink); font-size: 14px; }
+.section-trigger small { margin-top: 3px; color: var(--ink-3); font-size: 11px; }
+.section-icon { width: 43px; height: 43px; display: grid; place-items: center; flex: 0 0 auto; color: var(--brand); border-radius: 13px; background: var(--brand-soft); }
+.section-action { margin-right: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--brand); font-size: 12px; font-weight: 700; }
+.section-body { padding: 20px; border-top: 1px solid var(--line); }
+.info-panel { padding: 13px 15px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); font-size: 12px; line-height: 1.9; }
+.file-picker { min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink-2); border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--surface); font-size: 12px; font-weight: 700; transition: .16s; }
+.file-picker:hover { color: var(--brand); border-color: var(--brand); background: var(--brand-soft); }
+.form-error { padding: 10px 12px; color: var(--crit); border: 1px solid color-mix(in srgb, var(--crit) 25%, transparent); border-radius: 10px; background: var(--crit-soft); font-size: 12px; }
+.import-result { padding: 13px; display: flex; align-items: baseline; gap: 8px; color: var(--ink-2); border-radius: 12px; background: var(--surface-2); }
+.import-result strong { color: var(--ink); font-size: 21px; }
+.import-result span { font-size: 12px; }
+.import-result.is-good { color: var(--good); background: var(--good-soft); }
+.import-result.is-good strong, .import-result.is-danger strong { color: inherit; }
+.import-result.is-danger { color: var(--crit); background: var(--crit-soft); }
+.data-frame { border: 1px solid var(--line); border-radius: 13px; }
+
+/* Consistent visual hierarchy for existing cards and actions. */
+.app-main .rounded-xl.bg-white, .app-main .rounded-2xl.bg-white { border: 1px solid var(--line); box-shadow: var(--shadow); }
+.app-main button[class*="bg-blue-600"], .app-main button[class*="bg-green-600"], .app-main button[class*="bg-gray-700"] {
+  min-height: 42px; padding-inline: 16px; border-radius: 11px !important; font-weight: 700; box-shadow: 0 8px 18px -14px rgba(1,31,42,.55); transition: transform .16s, box-shadow .16s;
+}
+.app-main button[class*="bg-blue-600"]:hover:not(:disabled), .app-main button[class*="bg-green-600"]:hover:not(:disabled), .app-main button[class*="bg-gray-700"]:hover:not(:disabled) { transform: translateY(-1px); }
 .app-main .bg-blue-600, .app-main .bg-blue-500 { background-color: var(--brand) !important; }
 .app-main .hover\:bg-blue-700:hover { background-color: var(--brand-2) !important; }
 .app-main .text-blue-700, .app-main .text-blue-600, .app-main .text-blue-500 { color: var(--brand) !important; }
