@@ -1,10 +1,11 @@
 import {
   Controller, Get, Post, Put, Delete,
   Body, Param, Query, UseGuards,
-  UseInterceptors, UploadedFile, BadRequestException,
+  UseInterceptors, UploadedFile, BadRequestException, StreamableFile,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { diskStorage } from 'multer'
+import { diskStorage, memoryStorage } from 'multer'
+import { employeeTemplate } from './employee-import'
 import { extname, join } from 'path'
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
@@ -32,6 +33,26 @@ const photoStorage = diskStorage({
 @Controller('employees')
 export class EmployeesController {
   constructor(private employeesService: EmployeesService) {}
+
+  @Get('import-template')
+  @Roles('super_admin', 'hr_manager')
+  async importTemplate() {
+    return new StreamableFile(Buffer.from(await employeeTemplate()), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="employees-template.xlsx"',
+    })
+  }
+
+  @Post('import')
+  @Roles('super_admin', 'hr_manager')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+    fileFilter: (_req, file, cb) => cb(extname(file.originalname).toLowerCase() === '.xlsx' ? null : new BadRequestException('يُسمح بملفات XLSX فقط'), extname(file.originalname).toLowerCase() === '.xlsx'),
+  }))
+  importEmployees(@CurrentUser() user: JwtPayload, @Body('branchId') branchId: string, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('اختر ملف Excel')
+    return this.employeesService.importExcel(user.tenantId, branchId, file.buffer)
+  }
 
   @Get()
   @Roles('super_admin', 'hr_manager', 'supervisor')

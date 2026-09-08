@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common'
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common'
+import { parseEmployees } from './employee-import'
 import * as bcrypt from 'bcrypt'
 import { prisma } from '@shift-saas/database'
 import { CreateEmployeeDto } from './dto/create-employee.dto'
@@ -44,6 +45,25 @@ function duplicateFieldMessage(error: any): string | null {
 
 @Injectable()
 export class EmployeesService {
+  async importExcel(tenantId: string, branchId: string, buffer: Buffer) {
+    if (!branchId || !await prisma.branch.findFirst({ where: { id: branchId, tenantId }, select: { id: true } })) {
+      throw new BadRequestException('اختر فرعاً تابعاً للشركة')
+    }
+    const rows = await parseEmployees(buffer, branchId)
+    const errors: { row: number; message: string }[] = []
+    let imported = 0
+    for (const row of rows) {
+      if (row.errors.length) { errors.push({ row: row.row, message: row.errors.join('؛ ') }); continue }
+      try {
+        await this.create(tenantId, row.dto)
+        imported++
+      } catch (error) {
+        errors.push({ row: row.row, message: error instanceof ConflictException ? error.message : 'تعذر حفظ الصف؛ تحقق من البيانات قبل إعادة المحاولة' })
+      }
+    }
+    return { total: rows.length, imported, rejected: errors.length, errors }
+  }
+
   private readonly select = {
     id: true,
     employeeCode: true,

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { api } from '../../../lib/api'
 import { useAuth } from '../../../hooks/useAuth'
+import { EmployeeImport } from '../../../components/employee-import'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -92,6 +93,11 @@ export default function EmployeesPage() {
           + إضافة موظف
         </Link>
       </div>
+
+      <EmployeeImport onImported={() => {
+        fetchEmployees()
+        api.get('/employees/stats').then(r => setStats(r.data)).catch(() => {})
+      }} />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

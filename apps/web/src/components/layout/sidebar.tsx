@@ -7,6 +7,9 @@ import type { LucideIcon } from 'lucide-react'
 import { Activity, BadgeCheck, Banknote, Building2, CalendarClock, ClipboardCheck, Clock3, FileClock, LayoutDashboard, LogOut, Menu, PackageCheck, Settings, ShieldCheck, Shirt, UserRound, UsersRound, X } from 'lucide-react'
 import { getRoles, getModules } from '../../lib/auth'
 import { ThemeToggle } from './theme-toggle'
+import { api } from '../../lib/api'
+
+interface TenantBrand { id: string; name: string; logo: string | null }
 
 type Access = 'all' | 'mgmt' | 'hr' | 'super'
 interface NavItem { href: string; label: string; icon: LucideIcon; access: Access; module?: string }
@@ -50,6 +53,23 @@ export function Sidebar() {
   const [roles, setRoles] = useState<string[]>([])
   const [modules, setModules] = useState<string[]>([])
   const [open, setOpen] = useState(false)
+  const [tenant, setTenant] = useState<TenantBrand | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const refreshBrand = () => {
+      if (!localStorage.getItem('access_token')) return
+      api.get<TenantBrand>('/tenants/me', { signal: controller.signal })
+        .then(({ data }) => setTenant(data))
+        .catch(() => { /* Keep the existing brand during temporary connection failures. */ })
+    }
+    refreshBrand()
+    window.addEventListener('focus', refreshBrand)
+    return () => {
+      controller.abort()
+      window.removeEventListener('focus', refreshBrand)
+    }
+  }, [])
 
   useEffect(() => {
     setRoles(getRoles())
@@ -70,14 +90,14 @@ export function Sidebar() {
     <>
       <header className="mobile-bar">
         <button onClick={() => setOpen(true)} className="mobile-menu" aria-label="فتح القائمة"><Menu size={21} /></button>
-        <Brand compact />
+        <Brand compact tenant={tenant} />
         <ThemeToggle className="mobile-theme" />
       </header>
       {open ? <button className="sidebar-scrim" aria-label="إغلاق القائمة" onClick={() => setOpen(false)} /> : null}
 
       <aside className={`ops-sidebar ${open ? 'is-open' : ''}`}>
         <div className="sidebar-head">
-          <Brand />
+          <Brand tenant={tenant} />
           <button className="sidebar-close" onClick={() => setOpen(false)} aria-label="إغلاق القائمة"><X size={20} /></button>
         </div>
 
@@ -112,11 +132,18 @@ export function Sidebar() {
   )
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
+function Brand({ compact = false, tenant }: { compact?: boolean; tenant: TenantBrand | null }) {
+  const [failedLogo, setFailedLogo] = useState<string | null>(null)
+  const logo = tenant?.logo
+  const logoUrl = logo ? (/^https?:\/\//i.test(logo) ? logo : `${(process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '')}/${logo.replace(/^\/+/, '')}`) : null
   return (
     <div className={`brand-lockup ${compact ? 'is-compact' : ''}`}>
-      <span className="brand-logo wardiya-mark" role="img" aria-label="شعار نظام وردية" />
-      <div><strong>نظام وردية</strong>{compact ? null : <small>إدارة أسهل، ورديات أذكى</small>}</div>
+      {logoUrl && failedLogo !== logoUrl ? (
+        <img className="brand-logo tenant-logo" src={logoUrl} alt={`شعار ${tenant?.name ?? 'الشركة'}`} onError={() => setFailedLogo(logoUrl)} />
+      ) : (
+        <span className="brand-logo wardiya-mark" role="img" aria-label="شعار نظام وردية" />
+      )}
+      <div><strong>{tenant?.name || 'نظام وردية'}</strong>{compact ? null : <small>{tenant?.name ? 'نظام وردية · إدارة أسهل، ورديات أذكى' : 'إدارة أسهل، ورديات أذكى'}</small>}</div>
     </div>
   )
 }
