@@ -14,6 +14,15 @@ export class PlatformAuthService {
     const valid = await bcrypt.compare(dto.password, admin.passwordHash)
     if (!valid) throw new UnauthorizedException('بيانات الدخول غير صحيحة')
 
+    await prisma.platformAuditLog.create({
+      data: {
+        tenantId: null,
+        action: 'PLATFORM_LOGIN',
+        entityId: admin.id,
+        details: { platformOwnerName: admin.fullName, platformOwnerEmail: admin.email },
+      },
+    })
+
     const accessToken = this.jwt.sign(
       { sub: admin.id, email: admin.email, fullName: admin.fullName },
       { secret: process.env.PLATFORM_JWT_SECRET, expiresIn: process.env.PLATFORM_JWT_EXPIRES_IN ?? '30m' },

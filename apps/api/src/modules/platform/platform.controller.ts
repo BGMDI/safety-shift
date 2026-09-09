@@ -38,6 +38,7 @@ export class PlatformController {
 
   /* ── الشركات ── */
   @Get('tenants') listTenants() { return this.svc.listTenants() }
+  @Get('audit') listGlobalPlatformAudit() { return this.svc.listPlatformAudit() }
   @Get('tenants/:id') getTenant(@Param('id') id: string) { return this.svc.getTenant(id) }
   /** يصكّ توكن دخول تينانت لأدمن الشركة — جلسة قصيرة بلا refreshToken، موسومة بهوية مالك المنصة */
   @Post('tenants/:id/impersonate') impersonate(@Param('id') id: string, @Req() req: any) {
@@ -94,7 +95,7 @@ export class PlatformController {
   ) { return this.svc.deleteTenantLeaveRequest(id, requestId) }
 
   /* ── سجل تدقيق مالك المنصة لهذه الشركة — منفصل تماماً عن سجل تدقيق الشركة نفسها ── */
-  @Get('tenants/:id/platform-audit') listPlatformAudit(@Param('id') id: string) { return this.svc.listPlatformAuditForTenant(id) }
+  @Get('tenants/:id/platform-audit') listTenantPlatformAudit(@Param('id') id: string) { return this.svc.listPlatformAuditForTenant(id) }
 
   @Post('tenants/:id/logo')
   @UseInterceptors(FileInterceptor('logo', {

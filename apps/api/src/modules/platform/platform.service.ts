@@ -304,7 +304,7 @@ export class PlatformService {
   async impersonateTenant(tenantId: string, platformAdminId: string): Promise<{ accessToken: string; expiresIn: string; adminName: string }> {
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { enabledModules: true, planStatus: true },
+      select: { name: true, enabledModules: true, planStatus: true },
     })
     if (!tenant) throw new NotFoundException('الشركة غير موجودة')
 
@@ -324,8 +324,11 @@ export class PlatformService {
       impersonatedBy: platformAdminId,
     }
 
+    const platformOwner = await prisma.platformAdmin.findUnique({ where: { id: platformAdminId }, select: { fullName: true, email: true } })
     await this.logPlatformAction(tenantId, 'TENANT_IMPERSONATE', admin.id, {
-      adminName: admin.fullName, adminEmail: admin.email, platformAdminId,
+      tenantName: tenant.name,
+      targetUserName: admin.fullName, targetUserEmail: admin.email,
+      platformOwnerId: platformAdminId, platformOwnerName: platformOwner?.fullName, platformOwnerEmail: platformOwner?.email,
     })
 
     return {
@@ -343,6 +346,37 @@ export class PlatformService {
 
   async listPlatformAuditForTenant(tenantId: string) {
     return prisma.platformAuditLog.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } })
+  }
+
+  async listPlatformAudit() {
+    const logs = await prisma.platformAuditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 500 })
+    const tenantIds = [...new Set(logs.map(log => log.tenantId).filter((id): id is string => Boolean(id)))]
+    const ownerIds = [...new Set(logs.map(log => {
+      const details = log.details as Record<string, unknown> | null
+      return String(details?.platformOwnerId ?? details?.platformAdminId ?? '')
+    }).filter(Boolean))]
+    const [tenants, owners] = await Promise.all([
+      prisma.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, name: true } }),
+      prisma.platformAdmin.findMany({ where: { id: { in: ownerIds } }, select: { id: true, fullName: true, email: true } }),
+    ])
+    const tenantNames = new Map(tenants.map(tenant => [tenant.id, tenant.name]))
+    const ownerNames = new Map(owners.map(owner => [owner.id, owner]))
+    return logs.map(log => {
+      const details = (log.details ?? {}) as Record<string, any>
+      const ownerId = String(details.platformOwnerId ?? details.platformAdminId ?? '')
+      const owner = ownerNames.get(ownerId)
+      return {
+        ...log,
+        tenantName: log.tenantId ? tenantNames.get(log.tenantId) ?? details.tenantName ?? 'شركة محذوفة' : null,
+        details: {
+          ...details,
+          platformOwnerName: details.platformOwnerName ?? owner?.fullName,
+          platformOwnerEmail: details.platformOwnerEmail ?? owner?.email,
+          targetUserName: details.targetUserName ?? details.adminName,
+          targetUserEmail: details.targetUserEmail ?? details.adminEmail,
+        },
+      }
+    })
   }
 
   /* ══════════ طلبات إجازة الشركة — عرض وحذف من قِبل مالك المنصة فقط ══════════ */

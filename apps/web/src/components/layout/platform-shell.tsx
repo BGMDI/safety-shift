@@ -3,13 +3,14 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Building2, CreditCard, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from 'lucide-react'
+import { Building2, CreditCard, FileClock, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
 
 const links = [
   { href: '/platform/dashboard', label: 'النظرة العامة', icon: LayoutDashboard },
   { href: '/platform/tenants', label: 'الشركات المشتركة', icon: Building2 },
   { href: '/platform/plans', label: 'خطط الاشتراك', icon: CreditCard },
+  { href: '/platform/audit', label: 'سجل التدقيق', icon: FileClock },
 ]
 
 export function PlatformShell({ children }: { children: React.ReactNode }) {
