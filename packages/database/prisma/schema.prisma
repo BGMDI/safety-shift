@@ -21,6 +21,8 @@ model Tenant {
   certificateStamp          String?
   certificateHeader         String?
   certificateFooter         String?
+  certificateSignerName     String?
+  certificateSignerTitle    String?
   plan              SubscriptionPlan @default(TRIAL)
   planStatus        PlanStatus       @default(TRIAL)
   stripeCustomerId  String?          @unique

@@ -8,6 +8,7 @@ export class TenantsService {
     salaryCertificateText: true, employmentCertificateText: true,
     certificateSignature: true, certificateStamp: true,
     certificateHeader: true, certificateFooter: true,
+    certificateSignerName: true, certificateSignerTitle: true,
   }
   /** بيانات عرض الشركة الأساسية لأي موظف مسجّل دخول — الاسم والشعار فقط */
   async getMine(tenantId: string) {
@@ -25,13 +26,15 @@ export class TenantsService {
     return tenant
   }
 
-  async updateCertificateSettings(tenantId: string, data: { salaryCertificateText?: string; employmentCertificateText?: string }) {
+  async updateCertificateSettings(tenantId: string, data: { salaryCertificateText?: string; employmentCertificateText?: string; certificateSignerName?: string; certificateSignerTitle?: string }) {
     await this.getCertificateSettings(tenantId)
     return prisma.tenant.update({
       where: { id: tenantId },
       data: {
         salaryCertificateText: data.salaryCertificateText?.trim() || null,
         employmentCertificateText: data.employmentCertificateText?.trim() || null,
+        certificateSignerName: data.certificateSignerName?.trim() || null,
+        certificateSignerTitle: data.certificateSignerTitle?.trim() || null,
       },
       select: this.certificateSelect,
     })

@@ -109,7 +109,7 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
             <tr class="total"><td colspan="2">الراتب الصافي</td><td>${Number(cert.summary?.net ?? 0).toLocaleString('ar-SA')} ر.س</td></tr>
           </tbody>
         </table>` : ''}
-        <div class="approval"><div class="approval-box"><strong>إدارة شؤون الموظفين</strong><div class="assets">${signature ? `<img src="${escapeHtml(signature)}" alt="التوقيع">` : ''}${stamp ? `<img src="${escapeHtml(stamp)}" alt="الختم">` : ''}</div></div></div>
+        <div class="approval"><div class="approval-box">${cert.tenant?.certificateSignerTitle ? `<strong>${escapeHtml(cert.tenant.certificateSignerTitle)}</strong>` : '<strong>إدارة شؤون الموظفين</strong>'}${cert.tenant?.certificateSignerName ? `<div class="ref">${escapeHtml(cert.tenant.certificateSignerName)}</div>` : ''}<div class="assets">${signature ? `<img src="${escapeHtml(signature)}" alt="التوقيع">` : ''}${stamp ? `<img src="${escapeHtml(stamp)}" alt="الختم">` : ''}</div></div></div>
         <footer class="footer">${footer ? `<img src="${escapeHtml(footer)}" alt="تذييل الخطاب">` : `<div class="footer-text">صدر هذا التعريف إلكترونياً من نظام وردية لصالح ${escapeHtml(cert.tenant?.name ?? 'الشركة')}</div>`}</footer>
         </body></html>
       `)

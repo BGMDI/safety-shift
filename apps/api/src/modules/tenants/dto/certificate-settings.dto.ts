@@ -10,4 +10,14 @@ export class UpdateCertificateSettingsDto {
   @IsString()
   @MaxLength(5000)
   employmentCertificateText?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  certificateSignerName?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  certificateSignerTitle?: string
 }

@@ -63,6 +63,8 @@ export class SalaryService {
         select: {
           name: true, logo: true, salaryCertificateText: true, employmentCertificateText: true,
           certificateSignature: true, certificateStamp: true,
+          certificateHeader: true, certificateFooter: true,
+          certificateSignerName: true, certificateSignerTitle: true,
         },
       }),
     ])

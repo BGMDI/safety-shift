@@ -19,6 +19,8 @@ interface Settings {
   certificateStamp: string | null
   certificateHeader: string | null
   certificateFooter: string | null
+  certificateSignerName: string | null
+  certificateSignerTitle: string | null
 }
 
 export default function SettingsPage() {
@@ -30,6 +32,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [previewType, setPreviewType] = useState<'salary' | 'employment'>('salary')
+  const [signerName, setSignerName] = useState('')
+  const [signerTitle, setSignerTitle] = useState('إدارة شؤون الموظفين')
 
   useEffect(() => {
     setAllowed(isHR())
@@ -37,6 +41,8 @@ export default function SettingsPage() {
       setSettings(data)
       setSalaryText(data.salaryCertificateText || DEFAULT_SALARY)
       setEmploymentText(data.employmentCertificateText || DEFAULT_EMPLOYMENT)
+      setSignerName(data.certificateSignerName || '')
+      setSignerTitle(data.certificateSignerTitle || 'إدارة شؤون الموظفين')
     }).catch(() => setMessage('تعذر تحميل إعدادات التعاريف'))
   }, [])
 
@@ -46,6 +52,8 @@ export default function SettingsPage() {
       const { data } = await api.put<Settings>('/tenants/certificate-settings', {
         salaryCertificateText: salaryText,
         employmentCertificateText: employmentText,
+        certificateSignerName: signerName,
+        certificateSignerTitle: signerTitle,
       })
       setSettings(data); setMessage('تم حفظ قوالب التعاريف')
     } catch (e: any) { setMessage(e.response?.data?.message ?? 'تعذر حفظ القوالب') }
@@ -97,6 +105,10 @@ export default function SettingsPage() {
               <AssetUpload title="التوقيع" icon={<FileSignature size={18} />} url={settings.certificateSignature} compact onChange={file => upload('signature', file)} />
               <AssetUpload title="الختم" icon={<Stamp size={18} />} url={settings.certificateStamp} compact onChange={file => upload('stamp', file)} />
             </div>
+            <div className="mt-4 pt-4 border-t space-y-3">
+              <div className="field-group"><label htmlFor="signer-name">اسم معتمد الإفادة</label><input id="signer-name" value={signerName} onChange={e => setSignerName(e.target.value)} maxLength={150} placeholder="مثال: أحمد محمد" className="w-full" /></div>
+              <div className="field-group"><label htmlFor="signer-title">منصب معتمد الإفادة</label><input id="signer-title" value={signerTitle} onChange={e => setSignerTitle(e.target.value)} maxLength={150} placeholder="مثال: مدير الموارد البشرية" className="w-full" /></div>
+            </div>
           </section>
         </aside>
       </div>
@@ -110,7 +122,7 @@ export default function SettingsPage() {
           </div>
         </div>
         <div className="p-4 sm:p-7 bg-slate-100 overflow-auto">
-          <CertificatePreview settings={settings} type={previewType} text={previewType === 'salary' ? salaryText : employmentText} />
+          <CertificatePreview settings={settings} type={previewType} text={previewType === 'salary' ? salaryText : employmentText} signerName={signerName} signerTitle={signerTitle} />
         </div>
       </section>
     </main>
@@ -134,7 +146,7 @@ function AssetUpload({ title, hint, icon, url, wide = false, compact = false, on
   </label>
 }
 
-function CertificatePreview({ settings, type, text }: { settings: Settings; type: 'salary' | 'employment'; text: string }) {
+function CertificatePreview({ settings, type, text, signerName, signerTitle }: { settings: Settings; type: 'salary' | 'employment'; text: string; signerName: string; signerTitle: string }) {
   const fields: Record<string, string> = {
     '{اسم_الشركة}': settings.name, '{اسم_الموظف}': 'محمد أحمد العتيبي', '{الرقم_الوظيفي}': 'WRD-1024',
     '{رقم_الهوية}': '10XXXXXXXX', '{الجنسية}': 'سعودي', '{المسمى_الوظيفي}': 'أخصائي موارد بشرية',
@@ -150,7 +162,7 @@ function CertificatePreview({ settings, type, text }: { settings: Settings; type
     <p className="text-center text-sm text-slate-600 mt-2 mb-8">إلى: <strong>إلى من يهمه الأمر</strong></p>
     <p className="text-[15px] leading-9 text-justify whitespace-pre-wrap min-h-44">{preview}</p>
     {type === 'salary' ? <table className="w-full text-sm mt-6 border-collapse"><tbody><tr><td className="border p-3">الراتب الأساسي</td><td className="border p-3">٨٬٠٠٠ ر.س</td></tr><tr><td className="border p-3">إجمالي البدلات</td><td className="border p-3">٢٬٠٠٠ ر.س</td></tr><tr className="bg-blue-50 font-bold"><td className="border p-3">الراتب الصافي</td><td className="border p-3">٩٬٢٥٠ ر.س</td></tr></tbody></table> : null}
-    <div className="mt-12 mr-auto w-64 text-center"><strong className="text-sm">إدارة شؤون الموظفين</strong><div className="h-24 flex items-center justify-center gap-2">{settings.certificateSignature ? <img src={url(settings.certificateSignature)} alt="التوقيع" className="max-w-28 max-h-20 object-contain" /> : null}{settings.certificateStamp ? <img src={url(settings.certificateStamp)} alt="الختم" className="max-w-28 max-h-20 object-contain" /> : null}</div></div>
+    <div className="mt-12 mr-auto w-64 text-center">{signerTitle.trim() ? <strong className="block text-sm">{signerTitle}</strong> : null}{signerName.trim() ? <span className="block text-xs text-slate-600 mt-1">{signerName}</span> : null}<div className="h-24 flex items-center justify-center gap-2">{settings.certificateSignature ? <img src={url(settings.certificateSignature)} alt="التوقيع" className="max-w-28 max-h-20 object-contain" /> : null}{settings.certificateStamp ? <img src={url(settings.certificateStamp)} alt="الختم" className="max-w-28 max-h-20 object-contain" /> : null}</div></div>
     <footer className="absolute bottom-5 left-16 right-16">{settings.certificateFooter ? <img src={url(settings.certificateFooter)} alt="فوتر الخطاب" className="w-full h-20 object-contain object-bottom" /> : <p className="border-t pt-2 text-center text-[10px] text-slate-500">صدر هذا التعريف إلكترونيًا من نظام وردية لصالح {settings.name}</p>}</footer>
   </article>
 }
