@@ -164,7 +164,8 @@ function CertificatePreview({ settings, type, text, signerName, signerTitle }: {
   for (const [key, value] of Object.entries(fields)) preview = preview.replaceAll(key, value)
   const url = (path: string | null) => path ? `${API_URL}${path}` : ''
   return <article className="relative bg-white text-slate-900 mx-auto w-[794px] min-h-[1040px] shadow-xl border border-slate-200 px-16 pt-10 pb-28" dir="rtl">
-    {settings.certificateHeader ? <img src={url(settings.certificateHeader)} alt="هيدر الخطاب" className="w-full h-28 object-contain object-top mb-5" /> : <header className="flex items-center justify-between border-b-[3px] border-blue-500 pb-5"><div><strong className="text-xl">{settings.name}</strong><p className="text-xs text-slate-500 mt-2">التاريخ: {new Date().toLocaleDateString('ar-SA')}<br />الرقم الوظيفي: WRD-1024</p></div>{settings.logo ? <img src={url(settings.logo)} alt="شعار الشركة" className="w-24 h-16 object-contain" /> : null}</header>}
+    {settings.certificateHeader ? <img src={url(settings.certificateHeader)} alt="هيدر الخطاب" className="w-full h-28 object-contain object-top" /> : <header className="flex items-center justify-between border-b-[3px] border-blue-500 pb-5"><strong className="text-xl">{settings.name}</strong>{settings.logo ? <img src={url(settings.logo)} alt="شعار الشركة" className="w-24 h-16 object-contain" /> : null}</header>}
+    <div className="mt-4 flex items-center justify-between border-b border-slate-200 pb-3 text-xs text-slate-500"><span>التاريخ: {new Date().toLocaleDateString('ar-SA')}</span><span>الرقم الوظيفي: WRD-1024</span></div>
     <h1 className="text-center text-2xl font-black mt-9">{type === 'salary' ? 'إفادة' : 'تعريف موظف'}</h1>
     <p className="text-center text-sm text-slate-600 mt-2 mb-8">إلى: <strong>إلى من يهمه الأمر</strong></p>
     <p className="text-[15px] leading-9 text-justify whitespace-pre-wrap min-h-44">{preview}</p>
