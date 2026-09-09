@@ -87,7 +87,7 @@ export default function SettingsPage() {
 
       <div className="grid xl:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
         <section className="space-y-5">
-          <TemplateEditor title="تعريف بالراتب" value={salaryText} onChange={setSalaryText} />
+          <TemplateEditor title="إفادة" value={salaryText} onChange={setSalaryText} />
           <TemplateEditor title="تعريف بدون راتب" value={employmentText} onChange={setEmploymentText} />
           <div className="flex items-center gap-4">
             <button onClick={save} disabled={saving || !salaryText.trim() || !employmentText.trim()} className="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold disabled:opacity-40"><Save size={17} />{saving ? 'جارٍ الحفظ…' : 'حفظ القوالب'}</button>
@@ -107,7 +107,14 @@ export default function SettingsPage() {
             </div>
             <div className="mt-4 pt-4 border-t space-y-3">
               <div className="field-group"><label htmlFor="signer-name">اسم معتمد الإفادة</label><input id="signer-name" value={signerName} onChange={e => setSignerName(e.target.value)} maxLength={150} placeholder="مثال: أحمد محمد" className="w-full" /></div>
-              <div className="field-group"><label htmlFor="signer-title">منصب معتمد الإفادة</label><input id="signer-title" value={signerTitle} onChange={e => setSignerTitle(e.target.value)} maxLength={150} placeholder="مثال: مدير الموارد البشرية" className="w-full" /></div>
+              <div className="field-group">
+                <label>منصب معتمد الإفادة</label>
+                <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+                  <button type="button" onClick={() => setSignerTitle('إدارة شؤون الموظفين')} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${signerTitle === 'إدارة شؤون الموظفين' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>إدارة شؤون الموظفين</button>
+                  <button type="button" onClick={() => signerTitle === 'إدارة شؤون الموظفين' && setSignerTitle('')} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${signerTitle !== 'إدارة شؤون الموظفين' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>مسمى آخر</button>
+                </div>
+                {signerTitle !== 'إدارة شؤون الموظفين' ? <input id="signer-title" value={signerTitle} onChange={e => setSignerTitle(e.target.value)} maxLength={150} placeholder="مثال: مدير الموارد البشرية" className="mt-2 w-full" autoFocus /> : null}
+              </div>
             </div>
           </section>
         </aside>
@@ -117,7 +124,7 @@ export default function SettingsPage() {
         <div className="p-5 border-b flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3"><span className="section-icon"><Eye size={20} /></span><div><h2 className="font-black">معاينة الخطاب</h2><p className="text-xs text-gray-500 mt-1">تتحدث المعاينة مباشرة أثناء تعديل النص أو رفع الصور.</p></div></div>
           <div className="flex bg-gray-100 rounded-xl p-1">
-            <button onClick={() => setPreviewType('salary')} className={`px-4 py-2 rounded-lg text-xs font-bold ${previewType === 'salary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>تعريف بالراتب</button>
+            <button onClick={() => setPreviewType('salary')} className={`px-4 py-2 rounded-lg text-xs font-bold ${previewType === 'salary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>إفادة</button>
             <button onClick={() => setPreviewType('employment')} className={`px-4 py-2 rounded-lg text-xs font-bold ${previewType === 'employment' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>بدون راتب</button>
           </div>
         </div>
@@ -158,7 +165,7 @@ function CertificatePreview({ settings, type, text, signerName, signerTitle }: {
   const url = (path: string | null) => path ? `${API_URL}${path}` : ''
   return <article className="relative bg-white text-slate-900 mx-auto w-[794px] min-h-[1040px] shadow-xl border border-slate-200 px-16 pt-10 pb-28" dir="rtl">
     {settings.certificateHeader ? <img src={url(settings.certificateHeader)} alt="هيدر الخطاب" className="w-full h-28 object-contain object-top mb-5" /> : <header className="flex items-center justify-between border-b-[3px] border-blue-500 pb-5"><div><strong className="text-xl">{settings.name}</strong><p className="text-xs text-slate-500 mt-2">التاريخ: {new Date().toLocaleDateString('ar-SA')}<br />الرقم الوظيفي: WRD-1024</p></div>{settings.logo ? <img src={url(settings.logo)} alt="شعار الشركة" className="w-24 h-16 object-contain" /> : null}</header>}
-    <h1 className="text-center text-2xl font-black mt-9">{type === 'salary' ? 'تعريف بالراتب' : 'تعريف موظف'}</h1>
+    <h1 className="text-center text-2xl font-black mt-9">{type === 'salary' ? 'إفادة' : 'تعريف موظف'}</h1>
     <p className="text-center text-sm text-slate-600 mt-2 mb-8">إلى: <strong>إلى من يهمه الأمر</strong></p>
     <p className="text-[15px] leading-9 text-justify whitespace-pre-wrap min-h-44">{preview}</p>
     {type === 'salary' ? <table className="w-full text-sm mt-6 border-collapse"><tbody><tr><td className="border p-3">الراتب الأساسي</td><td className="border p-3">٨٬٠٠٠ ر.س</td></tr><tr><td className="border p-3">إجمالي البدلات</td><td className="border p-3">٢٬٠٠٠ ر.س</td></tr><tr className="bg-blue-50 font-bold"><td className="border p-3">الراتب الصافي</td><td className="border p-3">٩٬٢٥٠ ر.س</td></tr></tbody></table> : null}

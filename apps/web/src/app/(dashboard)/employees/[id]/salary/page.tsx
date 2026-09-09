@@ -95,11 +95,11 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
       if (!win) throw new Error('popup blocked')
       win.document.write(`
         <!DOCTYPE html><html lang="ar" dir="rtl">
-        <head><meta charset="UTF-8"><title>${certificateType === 'salary' ? 'تعريف بالراتب' : 'تعريف موظف'}</title>
+        <head><meta charset="UTF-8"><title>${certificateType === 'salary' ? 'إفادة' : 'تعريف موظف'}</title>
         <style>@page{size:A4;margin:12mm 18mm 18mm}*{box-sizing:border-box}body{font-family:Arial;color:#0b2135;direction:rtl;margin:0;padding-bottom:${footer ? '86px' : '30px'}}.letterhead{width:100%;height:105px;object-fit:contain;object-position:center top;margin-bottom:16px}.head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1e90ff;padding-bottom:18px}.head img{width:100px;height:70px;object-fit:contain}.company{font-size:22px;font-weight:bold}.ref{font-size:12px;color:#64748b;line-height:1.8}.title{text-align:center;margin:34px 0 8px;font-size:25px}.to{text-align:center;color:#334155;margin-bottom:30px}.body{font-size:16px;line-height:2.25;text-align:justify;min-height:180px}table{width:100%;border-collapse:collapse;margin:24px 0}td,th{border:1px solid #cbd5e1;padding:10px;text-align:right}.total{font-weight:bold;background:#eff6ff}.approval{margin-top:45px;display:flex;justify-content:flex-end}.approval-box{text-align:center;min-width:260px}.assets{height:105px;display:flex;align-items:center;justify-content:center;gap:5px}.assets img{max-width:125px;max-height:100px;object-fit:contain}.footer{position:fixed;bottom:0;left:0;right:0;text-align:center;color:#64748b}.footer img{width:100%;height:75px;object-fit:contain;object-position:center bottom}.footer-text{border-top:1px solid #cbd5e1;padding-top:8px;font-size:10px}</style>
         </head><body>
         ${header ? `<img class="letterhead" src="${escapeHtml(header)}" alt="ترويسة الخطاب">` : `<header class="head"><div><div class="company">${escapeHtml(cert.tenant?.name ?? 'الشركة')}</div><div class="ref">التاريخ: ${new Date().toLocaleDateString('ar-SA')}<br>الرقم الوظيفي: ${escapeHtml(cert.employee?.employeeCode)}</div></div>${logo ? `<img src="${escapeHtml(logo)}" alt="شعار الشركة">` : ''}</header>`}
-        <h1 class="title">${certificateType === 'salary' ? 'تعريف بالراتب' : 'تعريف موظف'}</h1>
+        <h1 class="title">${certificateType === 'salary' ? 'إفادة' : 'تعريف موظف'}</h1>
         <p class="to">إلى: <strong>${escapeHtml(recipient.trim())}</strong></p>
         <div class="body">${body}</div>
         ${certificateType === 'salary' ? `<table>
@@ -188,7 +188,7 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
           <h2 id="certificate-title" className="text-xl font-black mb-1">إصدار تعريف رسمي</h2>
           <p className="text-sm text-gray-500 mb-5">اختر نوع الخطاب وحدد الجهة الموجه لها قبل الطباعة.</p>
           <div className="grid grid-cols-2 gap-3 mb-5">
-            <button type="button" onClick={() => setCertificateType('salary')} className={`border rounded-xl p-4 text-right ${certificateType === 'salary' ? 'border-blue-600 bg-blue-50 text-blue-800' : ''}`}><strong className="block">تعريف بالراتب</strong><span className="text-xs">يتضمن تفاصيل الراتب والصافي</span></button>
+            <button type="button" onClick={() => setCertificateType('salary')} className={`border rounded-xl p-4 text-right ${certificateType === 'salary' ? 'border-blue-600 bg-blue-50 text-blue-800' : ''}`}><strong className="block">إفادة</strong><span className="text-xs">تتضمن تفاصيل الراتب والصافي</span></button>
             <button type="button" onClick={() => setCertificateType('employment')} className={`border rounded-xl p-4 text-right ${certificateType === 'employment' ? 'border-blue-600 bg-blue-50 text-blue-800' : ''}`}><strong className="block">تعريف بدون راتب</strong><span className="text-xs">يثبت العمل والمسمى فقط</span></button>
           </div>
           <label className="block text-sm font-bold mb-2" htmlFor="certificate-recipient">الجهة الموجه لها التعريف *</label>
