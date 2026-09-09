@@ -22,6 +22,9 @@ interface Settings {
   certificateSignerName: string | null
   certificateSignerTitle: string | null
   payrollInsuranceRate: number
+  payrollBasicRate: number
+  payrollHousingRate: number
+  payrollTransportRate: number
 }
 
 export default function SettingsPage() {
@@ -36,6 +39,9 @@ export default function SettingsPage() {
   const [signerName, setSignerName] = useState('')
   const [signerTitle, setSignerTitle] = useState('إدارة شؤون الموظفين')
   const [insuranceRate, setInsuranceRate] = useState('0')
+  const [basicRate, setBasicRate] = useState('65')
+  const [housingRate, setHousingRate] = useState('25')
+  const [transportRate, setTransportRate] = useState('10')
 
   useEffect(() => {
     setAllowed(isHR())
@@ -46,10 +52,15 @@ export default function SettingsPage() {
       setSignerName(data.certificateSignerName || '')
       setSignerTitle(data.certificateSignerTitle || 'إدارة شؤون الموظفين')
       setInsuranceRate(String(data.payrollInsuranceRate ?? 0))
+      setBasicRate(String(data.payrollBasicRate ?? 65))
+      setHousingRate(String(data.payrollHousingRate ?? 25))
+      setTransportRate(String(data.payrollTransportRate ?? 10))
     }).catch(() => setMessage('تعذر تحميل إعدادات التعاريف'))
   }, [])
 
   async function save() {
+    const allocationTotal = Number(basicRate) + Number(housingRate) + Number(transportRate)
+    if (Math.abs(allocationTotal - 100) > 0.001) { setMessage('يجب أن يكون مجموع نسب الأساسي والسكن والمواصلات 100٪'); return }
     setSaving(true); setMessage('')
     try {
       const { data } = await api.put<Settings>('/tenants/certificate-settings', {
@@ -58,6 +69,9 @@ export default function SettingsPage() {
         certificateSignerName: signerName,
         certificateSignerTitle: signerTitle,
         payrollInsuranceRate: Number(insuranceRate) || 0,
+        payrollBasicRate: Number(basicRate) || 0,
+        payrollHousingRate: Number(housingRate) || 0,
+        payrollTransportRate: Number(transportRate) || 0,
       })
       setSettings(data); setMessage('تم حفظ قوالب التعاريف')
     } catch (e: any) { setMessage(e.response?.data?.message ?? 'تعذر حفظ القوالب') }
@@ -92,7 +106,14 @@ export default function SettingsPage() {
       <div className="grid xl:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
         <section className="space-y-5">
           <article className="wardiya-section p-5">
-            <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold text-blue-600">إعداد موحد لجميع الرواتب</p><h2 className="mt-1 font-black">نسبة استقطاع التأمينات</h2><p className="mt-1 text-xs text-slate-500">تُخصم النسبة من إجمالي راتب الدرجة عند إنشاء المسير.</p></div><div className="field-group w-48"><label htmlFor="insurance-rate">النسبة (%)</label><input id="insurance-rate" type="number" min="0" max="100" step="0.01" value={insuranceRate} onChange={e => setInsuranceRate(e.target.value)} className="w-full" /></div></div>
+            <div><p className="text-xs font-bold text-blue-600">إعداد موحد لجميع الرواتب</p><h2 className="mt-1 font-black">توزيع الراتب والاستقطاعات</h2><p className="mt-1 text-xs text-slate-500">عدّل نسب توزيع إجمالي راتب الدرجة. يجب أن يكون مجموع مكونات الراتب 100٪.</p></div>
+            <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <RateField id="basic-rate" label="الراتب الأساسي" value={basicRate} onChange={setBasicRate} />
+              <RateField id="housing-rate" label="بدل السكن" value={housingRate} onChange={setHousingRate} />
+              <RateField id="transport-rate" label="بدل المواصلات" value={transportRate} onChange={setTransportRate} />
+              <RateField id="insurance-rate" label="استقطاع التأمينات" value={insuranceRate} onChange={setInsuranceRate} />
+            </div>
+            <div className={`mt-4 rounded-xl px-4 py-3 text-sm font-bold ${Math.abs(Number(basicRate) + Number(housingRate) + Number(transportRate) - 100) < .001 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>مجموع مكونات الراتب: {(Number(basicRate) + Number(housingRate) + Number(transportRate)).toLocaleString('ar-SA')}٪ {Math.abs(Number(basicRate) + Number(housingRate) + Number(transportRate) - 100) < .001 ? '✓' : '— يجب أن يساوي 100٪'}</div>
           </article>
           <TemplateEditor title="إفادة" value={salaryText} onChange={setSalaryText} />
           <TemplateEditor title="تعريف بدون راتب" value={employmentText} onChange={setEmploymentText} />
@@ -141,6 +162,10 @@ export default function SettingsPage() {
       </section>
     </main>
   )
+}
+
+function RateField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
+  return <div className="field-group"><label htmlFor={id}>{label} (%)</label><input id={id} type="number" min="0" max="100" step="0.01" value={value} onChange={e => onChange(e.target.value)} className="w-full" /></div>
 }
 
 function TemplateEditor({ title, value, onChange }: { title: string; value: string; onChange: (value: string) => void }) {

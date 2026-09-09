@@ -8,6 +8,15 @@ export class UpdateCertificateSettingsDto {
   @Min(0)
   @Max(100)
   payrollInsuranceRate?: number
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100)
+  payrollBasicRate?: number
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100)
+  payrollHousingRate?: number
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100)
+  payrollTransportRate?: number
   @IsOptional()
   @IsString()
   @MaxLength(5000)

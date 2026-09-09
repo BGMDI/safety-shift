@@ -47,6 +47,7 @@ export default function NewEmployeePage() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([])
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
   const [jobTitles, setJobTitles] = useState<{ id: string; name: string; baseSalary: number; maxGrade: number; gradeIncrement: number; housingAllowance: number; transportAllowance: number; otherAllowance: number; customAllowances: { name: string; amount: number }[] }[]>([])
+  const [salaryRates, setSalaryRates] = useState({ basic: 65, housing: 25, transport: 10 })
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -76,10 +77,12 @@ export default function NewEmployeePage() {
       api.get('/branches').catch(() => ({ data: [] })),
       api.get('/departments').catch(() => ({ data: [] })),
       api.get('/job-titles').catch(() => ({ data: [] })),
-    ]).then(([b, d, j]) => {
+      api.get('/tenants/certificate-settings').catch(() => ({ data: {} })),
+    ]).then(([b, d, j, settings]) => {
       setBranches(b.data)
       setDepartments(d.data)
       setJobTitles(j.data)
+      setSalaryRates({ basic: Number(settings.data.payrollBasicRate ?? 65), housing: Number(settings.data.payrollHousingRate ?? 25), transport: Number(settings.data.payrollTransportRate ?? 10) })
     })
     fetchNextCode('EMP')
   }, [fetchNextCode])
@@ -229,7 +232,7 @@ export default function NewEmployeePage() {
           </Field>
         </div>
 
-        {selectedJob ? (() => { const gross = Number(selectedJob.baseSalary) + (selectedGrade - 1) * Number(selectedJob.gradeIncrement); return <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4"><p className="text-xs font-bold text-blue-700">الراتب المحتسب تلقائيًا</p><div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"><span>الإجمالي: <strong>{gross.toLocaleString('ar-SA')} ر.س</strong></span><span>الأساسي 65%: <strong>{(gross * .65).toLocaleString('ar-SA')} ر.س</strong></span><span>السكن 25%: <strong>{(gross * .25).toLocaleString('ar-SA')} ر.س</strong></span><span>المواصلات 10%: <strong>{(gross * .10).toLocaleString('ar-SA')} ر.س</strong></span></div></div> })() : null}
+        {selectedJob ? (() => { const gross = Number(selectedJob.baseSalary) + (selectedGrade - 1) * Number(selectedJob.gradeIncrement); return <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4"><p className="text-xs font-bold text-blue-700">الراتب المحتسب تلقائيًا</p><div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"><span>الإجمالي: <strong>{gross.toLocaleString('ar-SA')} ر.س</strong></span><span>الأساسي {salaryRates.basic}%: <strong>{(gross * salaryRates.basic / 100).toLocaleString('ar-SA')} ر.س</strong></span><span>السكن {salaryRates.housing}%: <strong>{(gross * salaryRates.housing / 100).toLocaleString('ar-SA')} ر.س</strong></span><span>المواصلات {salaryRates.transport}%: <strong>{(gross * salaryRates.transport / 100).toLocaleString('ar-SA')} ر.س</strong></span></div></div> })() : null}
 
         <hr className="border-gray-100" />
 

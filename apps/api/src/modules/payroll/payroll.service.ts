@@ -61,7 +61,7 @@ export class PayrollService {
   async createRun(tenantId: string, month: number, year: number) {
     const existing = await prisma.payrollRun.findFirst({ where: { tenantId, month, year } })
     if (existing) throw new ConflictException('Payroll run already exists for this period')
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { payrollInsuranceRate: true } })
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { payrollInsuranceRate: true, payrollBasicRate: true, payrollHousingRate: true, payrollTransportRate: true } })
     if (!tenant) throw new NotFoundException('الشركة غير موجودة')
 
     const employees = await prisma.employee.findMany({
@@ -83,11 +83,11 @@ export class PayrollService {
       const grossSalary = emp.jobTitle
         ? Number(emp.jobTitle.baseSalary) + ((emp.jobGrade ?? 1) - 1) * Number(emp.jobTitle.gradeIncrement)
         : Number(base?.amount ?? 0)
-      const baseSalary = emp.jobTitle ? grossSalary * 0.65 : grossSalary
+      const baseSalary = emp.jobTitle ? grossSalary * Number(tenant.payrollBasicRate) / 100 : grossSalary
       const customJobAllowances = Array.isArray(emp.jobTitle?.customAllowances) ? emp.jobTitle.customAllowances as { name: string; amount: number }[] : []
       const jobAllowances = emp.jobTitle ? [
-        { name: 'بدل السكن', amount: grossSalary * 0.25 },
-        { name: 'بدل المواصلات', amount: grossSalary * 0.10 },
+        { name: 'بدل السكن', amount: grossSalary * Number(tenant.payrollHousingRate) / 100 },
+        { name: 'بدل المواصلات', amount: grossSalary * Number(tenant.payrollTransportRate) / 100 },
         { name: 'بدلات أخرى', amount: emp.jobTitle.otherAllowance },
         ...customJobAllowances,
       ].filter(component => Number(component.amount) > 0) : []

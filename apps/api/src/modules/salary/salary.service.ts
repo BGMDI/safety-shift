@@ -7,7 +7,7 @@ export class SalaryService {
   async getEmployeeSalary(tenantId: string, employeeId: string) {
     const employee = await prisma.employee.findFirst({
       where: { id: employeeId, tenantId },
-      select: { id: true, fullName: true, employeeCode: true, jobGrade: true, tenant: { select: { payrollInsuranceRate: true } },
+      select: { id: true, fullName: true, employeeCode: true, jobGrade: true, tenant: { select: { payrollInsuranceRate: true, payrollBasicRate: true, payrollHousingRate: true, payrollTransportRate: true } },
         jobTitle: { select: { name: true, baseSalary: true, gradeIncrement: true, housingAllowance: true, transportAllowance: true, otherAllowance: true, insuranceRate: true, customAllowances: true } } },
     })
     if (!employee) throw new NotFoundException('الموظف غير موجود')
@@ -20,14 +20,17 @@ export class SalaryService {
     const job = employee.jobTitle
     const grade = employee.jobGrade ?? 1
     const jobGross = job ? Number(job.baseSalary) + (grade - 1) * Number(job.gradeIncrement) : 0
-    const jobBase = jobGross * 0.65
-    const housingAllowance = jobGross * 0.25
-    const transportAllowance = jobGross * 0.10
+    const basicRate = Number(employee.tenant.payrollBasicRate)
+    const housingRate = Number(employee.tenant.payrollHousingRate)
+    const transportRate = Number(employee.tenant.payrollTransportRate)
+    const jobBase = jobGross * basicRate / 100
+    const housingAllowance = jobGross * housingRate / 100
+    const transportAllowance = jobGross * transportRate / 100
     const custom = Array.isArray(job?.customAllowances) ? job.customAllowances as { name: string; amount: number }[] : []
     const jobComponents = job ? [
-      { id: 'job:base', type: 'BASE', name: `الراتب الأساسي 65% — الدرجة ${grade}`, amount: jobBase, effectiveDate: '', locked: true },
-      { id: 'job:housing', type: 'ALLOWANCE', name: 'بدل السكن 25%', amount: housingAllowance, effectiveDate: '', locked: true },
-      { id: 'job:transport', type: 'ALLOWANCE', name: 'بدل المواصلات 10%', amount: transportAllowance, effectiveDate: '', locked: true },
+      { id: 'job:base', type: 'BASE', name: `الراتب الأساسي ${basicRate}% — الدرجة ${grade}`, amount: jobBase, effectiveDate: '', locked: true },
+      { id: 'job:housing', type: 'ALLOWANCE', name: `بدل السكن ${housingRate}%`, amount: housingAllowance, effectiveDate: '', locked: true },
+      { id: 'job:transport', type: 'ALLOWANCE', name: `بدل المواصلات ${transportRate}%`, amount: transportAllowance, effectiveDate: '', locked: true },
       { id: 'job:other', type: 'ALLOWANCE', name: 'بدلات أخرى', amount: Number(job.otherAllowance), effectiveDate: '', locked: true },
       ...custom.map((item, index) => ({ id: `job:custom:${index}`, type: 'ALLOWANCE', name: item.name, amount: Number(item.amount), effectiveDate: '', locked: true })),
     ].filter(component => component.type === 'BASE' || component.amount > 0) : []

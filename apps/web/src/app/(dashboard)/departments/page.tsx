@@ -429,12 +429,13 @@ function OrgTab() {
 ══════════════════════════════════════════ */
 function JobsTab() {
   const [titles, setTitles]   = useState<JobTitle[]>([])
+  const [rates, setRates] = useState({ basic: 65, housing: 25, transport: 10 })
   const [form, setForm]       = useState(emptyJob)
   const [saving, setSaving]   = useState(false)
   const [editId, setEditId]   = useState<string | null>(null)
 
   const load = () => api.get('/job-titles').then(r => setTitles(r.data)).catch(() => {})
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); api.get('/tenants/certificate-settings').then(({ data }) => setRates({ basic: Number(data.payrollBasicRate ?? 65), housing: Number(data.payrollHousingRate ?? 25), transport: Number(data.payrollTransportRate ?? 10) })).catch(() => {}) }, [])
 
   const create = async () => {
     if (!form.name.trim() || !form.baseSalary || !form.maxGrade) return
@@ -473,7 +474,7 @@ function JobsTab() {
 
       <div className="wardiya-section p-6">
         <div className="section-heading"><div><span>سلم الرواتب</span><h2>تعريف وظيفة جديدة</h2></div></div>
-        <JobSalaryFields value={form} onChange={setForm} />
+        <JobSalaryFields value={form} onChange={setForm} rates={rates} />
         <label className="flex items-center gap-2 mt-3 text-sm text-gray-600 cursor-pointer w-fit">
           <input type="checkbox" checked={form.isShiftEligible}
             onChange={e => setForm(p => ({ ...p, isShiftEligible: e.target.checked }))} />
@@ -493,9 +494,9 @@ function JobsTab() {
           </div>
         ) : (
           titles.map(t => <article key={t.id} className="wardiya-section p-5">
-            {editId === t.id ? <><JobSalaryFields value={t} onChange={next => setTitles(list => list.map(item => item.id === t.id ? { ...item, ...next } as JobTitle : item))} /><div className="mt-4 flex gap-2"><button onClick={() => update(t)} className="btn-primary">حفظ التعديلات</button><button onClick={() => { setEditId(null); load() }} className="btn-secondary">إلغاء</button></div></> : <>
+            {editId === t.id ? <><JobSalaryFields value={t} onChange={next => setTitles(list => list.map(item => item.id === t.id ? { ...item, ...next } as JobTitle : item))} rates={rates} /><div className="mt-4 flex gap-2"><button onClick={() => update(t)} className="btn-primary">حفظ التعديلات</button><button onClick={() => { setEditId(null); load() }} className="btn-secondary">إلغاء</button></div></> : <>
               <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-lg font-black">{t.name}</h3><p className="mt-1 text-xs text-slate-500">{t.maxGrade} درجات · زيادة {Number(t.gradeIncrement).toLocaleString('ar-SA')} ر.س لكل درجة · {t._count.employees} موظف</p></div><div className="flex gap-2"><button onClick={() => toggleShiftEligible(t)} className="btn-secondary">{t.isShiftEligible ? '✓ ضمن الشفتات' : 'إدارية'}</button><button onClick={() => setEditId(t.id)} className="btn-secondary">تعديل</button><button onClick={() => remove(t.id)} className="text-red-600 px-3 text-sm">حذف</button></div></div>
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">{[['إجمالي الدرجة 1', t.baseSalary], ['الأساسي 65%', Number(t.baseSalary) * .65], ['السكن 25%', Number(t.baseSalary) * .25], ['المواصلات 10%', Number(t.baseSalary) * .10], ['بدلات إضافية', t.otherAllowance]].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><span className="block text-xs text-slate-500">{label}</span><strong className="mt-1 block text-sm">{Number(value).toLocaleString('ar-SA')} ر.س</strong></div>)}</div>
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">{[['إجمالي الدرجة 1', t.baseSalary], [`الأساسي ${rates.basic}%`, Number(t.baseSalary) * rates.basic / 100], [`السكن ${rates.housing}%`, Number(t.baseSalary) * rates.housing / 100], [`المواصلات ${rates.transport}%`, Number(t.baseSalary) * rates.transport / 100], ['بدلات إضافية', t.otherAllowance]].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><span className="block text-xs text-slate-500">{label}</span><strong className="mt-1 block text-sm">{Number(value).toLocaleString('ar-SA')} ر.س</strong></div>)}</div>
               {t.customAllowances?.length ? <div className="mt-3 flex flex-wrap gap-2">{t.customAllowances.map((item, index) => <span key={`${item.name}-${index}`} className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">{item.name}: {Number(item.amount).toLocaleString('ar-SA')} ر.س</span>)}</div> : null}
             </>}
           </article>)
@@ -505,7 +506,7 @@ function JobsTab() {
   )
 }
 
-function JobSalaryFields({ value, onChange }: { value: typeof emptyJob | JobTitle; onChange: (value: any) => void }) {
+function JobSalaryFields({ value, onChange, rates }: { value: typeof emptyJob | JobTitle; onChange: (value: any) => void; rates: { basic: number; housing: number; transport: number } }) {
   const set = (key: string, next: any) => onChange({ ...value, [key]: next })
   return <div className="space-y-4">
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -515,7 +516,7 @@ function JobSalaryFields({ value, onChange }: { value: typeof emptyJob | JobTitl
       <div className="field-group"><label>الزيادة لكل درجة</label><input type="number" min="0" value={value.gradeIncrement} onChange={e => set('gradeIncrement', e.target.value)} className={inp} /></div>
       <div className="field-group"><label>بدلات إضافية عامة</label><input type="number" min="0" value={value.otherAllowance} onChange={e => set('otherAllowance', e.target.value)} className={inp} /></div>
     </div>
-    <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center text-xs"><span><strong className="block text-blue-700">65%</strong>راتب أساسي</span><span><strong className="block text-blue-700">25%</strong>بدل سكن</span><span><strong className="block text-blue-700">10%</strong>بدل مواصلات</span></div>
+    <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center text-xs"><span><strong className="block text-blue-700">{rates.basic}%</strong>راتب أساسي</span><span><strong className="block text-blue-700">{rates.housing}%</strong>بدل سكن</span><span><strong className="block text-blue-700">{rates.transport}%</strong>بدل مواصلات</span></div>
     <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/40 p-4"><div className="flex items-center justify-between"><div><strong className="text-sm">بدلات إضافية مسماة</strong><p className="text-xs text-slate-500">مثل بدل خطر أو بدل موقع.</p></div><button type="button" className="btn-secondary" onClick={() => set('customAllowances', [...(value.customAllowances ?? []), { name: '', amount: '' }])}>+ إضافة بدل آخر</button></div>{value.customAllowances?.map((item, index) => <div key={index} className="mt-3 grid grid-cols-[1fr_160px_auto] gap-2"><input value={item.name} onChange={e => set('customAllowances', value.customAllowances.map((current, i) => i === index ? { ...current, name: e.target.value } : current))} placeholder="اسم البدل" className={inp} /><input type="number" min="0" value={item.amount} onChange={e => set('customAllowances', value.customAllowances.map((current, i) => i === index ? { ...current, amount: e.target.value } : current))} placeholder="المبلغ" className={inp} /><button type="button" className="px-3 text-red-600" onClick={() => set('customAllowances', value.customAllowances.filter((_, i) => i !== index))}>حذف</button></div>)}</div>
   </div>
 }
