@@ -21,6 +21,7 @@ interface Settings {
   certificateFooter: string | null
   certificateSignerName: string | null
   certificateSignerTitle: string | null
+  payrollInsuranceRate: number
 }
 
 export default function SettingsPage() {
@@ -34,6 +35,7 @@ export default function SettingsPage() {
   const [previewType, setPreviewType] = useState<'salary' | 'employment'>('salary')
   const [signerName, setSignerName] = useState('')
   const [signerTitle, setSignerTitle] = useState('إدارة شؤون الموظفين')
+  const [insuranceRate, setInsuranceRate] = useState('0')
 
   useEffect(() => {
     setAllowed(isHR())
@@ -43,6 +45,7 @@ export default function SettingsPage() {
       setEmploymentText(data.employmentCertificateText || DEFAULT_EMPLOYMENT)
       setSignerName(data.certificateSignerName || '')
       setSignerTitle(data.certificateSignerTitle || 'إدارة شؤون الموظفين')
+      setInsuranceRate(String(data.payrollInsuranceRate ?? 0))
     }).catch(() => setMessage('تعذر تحميل إعدادات التعاريف'))
   }, [])
 
@@ -54,6 +57,7 @@ export default function SettingsPage() {
         employmentCertificateText: employmentText,
         certificateSignerName: signerName,
         certificateSignerTitle: signerTitle,
+        payrollInsuranceRate: Number(insuranceRate) || 0,
       })
       setSettings(data); setMessage('تم حفظ قوالب التعاريف')
     } catch (e: any) { setMessage(e.response?.data?.message ?? 'تعذر حفظ القوالب') }
@@ -87,6 +91,9 @@ export default function SettingsPage() {
 
       <div className="grid xl:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
         <section className="space-y-5">
+          <article className="wardiya-section p-5">
+            <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold text-blue-600">إعداد موحد لجميع الرواتب</p><h2 className="mt-1 font-black">نسبة استقطاع التأمينات</h2><p className="mt-1 text-xs text-slate-500">تُخصم النسبة من إجمالي راتب الدرجة عند إنشاء المسير.</p></div><div className="field-group w-48"><label htmlFor="insurance-rate">النسبة (%)</label><input id="insurance-rate" type="number" min="0" max="100" step="0.01" value={insuranceRate} onChange={e => setInsuranceRate(e.target.value)} className="w-full" /></div></div>
+          </article>
           <TemplateEditor title="إفادة" value={salaryText} onChange={setSalaryText} />
           <TemplateEditor title="تعريف بدون راتب" value={employmentText} onChange={setEmploymentText} />
           <div className="flex items-center gap-4">

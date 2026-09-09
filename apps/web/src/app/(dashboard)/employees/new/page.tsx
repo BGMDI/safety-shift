@@ -229,7 +229,7 @@ export default function NewEmployeePage() {
           </Field>
         </div>
 
-        {selectedJob ? <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4"><p className="text-xs font-bold text-blue-700">الراتب المحتسب تلقائيًا</p><div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"><span>الأساسي: <strong>{(Number(selectedJob.baseSalary) + (selectedGrade - 1) * Number(selectedJob.gradeIncrement)).toLocaleString('ar-SA')} ر.س</strong></span><span>السكن: <strong>{Number(selectedJob.housingAllowance).toLocaleString('ar-SA')} ر.س</strong></span><span>المواصلات: <strong>{Number(selectedJob.transportAllowance).toLocaleString('ar-SA')} ر.س</strong></span><span>بدلات أخرى: <strong>{Number(selectedJob.otherAllowance).toLocaleString('ar-SA')} ر.س</strong></span></div></div> : null}
+        {selectedJob ? (() => { const gross = Number(selectedJob.baseSalary) + (selectedGrade - 1) * Number(selectedJob.gradeIncrement); return <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4"><p className="text-xs font-bold text-blue-700">الراتب المحتسب تلقائيًا</p><div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"><span>الإجمالي: <strong>{gross.toLocaleString('ar-SA')} ر.س</strong></span><span>الأساسي 65%: <strong>{(gross * .65).toLocaleString('ar-SA')} ر.س</strong></span><span>السكن 25%: <strong>{(gross * .25).toLocaleString('ar-SA')} ر.س</strong></span><span>المواصلات 10%: <strong>{(gross * .10).toLocaleString('ar-SA')} ر.س</strong></span></div></div> })() : null}
 
         <hr className="border-gray-100" />
 

@@ -23,6 +23,7 @@ model Tenant {
   certificateFooter         String?
   certificateSignerName     String?
   certificateSignerTitle    String?
+  payrollInsuranceRate      Decimal          @default(0) @db.Decimal(5, 2)
   plan              SubscriptionPlan @default(TRIAL)
   planStatus        PlanStatus       @default(TRIAL)
   stripeCustomerId  String?          @unique

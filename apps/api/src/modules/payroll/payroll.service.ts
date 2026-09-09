@@ -61,6 +61,8 @@ export class PayrollService {
   async createRun(tenantId: string, month: number, year: number) {
     const existing = await prisma.payrollRun.findFirst({ where: { tenantId, month, year } })
     if (existing) throw new ConflictException('Payroll run already exists for this period')
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { payrollInsuranceRate: true } })
+    if (!tenant) throw new NotFoundException('الشركة غير موجودة')
 
     const employees = await prisma.employee.findMany({
       where: { tenantId, status: 'ACTIVE' },
@@ -78,13 +80,14 @@ export class PayrollService {
     let total = 0
     for (const emp of employees) {
       const base = emp.salaryComponents.find(c => c.type === 'BASE')
-      const baseSalary = emp.jobTitle
+      const grossSalary = emp.jobTitle
         ? Number(emp.jobTitle.baseSalary) + ((emp.jobGrade ?? 1) - 1) * Number(emp.jobTitle.gradeIncrement)
         : Number(base?.amount ?? 0)
+      const baseSalary = emp.jobTitle ? grossSalary * 0.65 : grossSalary
       const customJobAllowances = Array.isArray(emp.jobTitle?.customAllowances) ? emp.jobTitle.customAllowances as { name: string; amount: number }[] : []
       const jobAllowances = emp.jobTitle ? [
-        { name: 'بدل السكن', amount: emp.jobTitle.housingAllowance },
-        { name: 'بدل المواصلات', amount: emp.jobTitle.transportAllowance },
+        { name: 'بدل السكن', amount: grossSalary * 0.25 },
+        { name: 'بدل المواصلات', amount: grossSalary * 0.10 },
         { name: 'بدلات أخرى', amount: emp.jobTitle.otherAllowance },
         ...customJobAllowances,
       ].filter(component => Number(component.amount) > 0) : []
@@ -95,7 +98,7 @@ export class PayrollService {
       const regularAllowanceTotal = regularAllowances.reduce((s, c) => s + Number(c.amount), 0)
       const allowances = housingAllowance + regularAllowanceTotal + bonusAmount
       const deductionComponents = emp.salaryComponents.filter(c => c.type === 'DEDUCTION')
-      const automaticInsurance = emp.jobTitle ? baseSalary * Number(emp.jobTitle.insuranceRate) / 100 : 0
+      const automaticInsurance = emp.jobTitle ? grossSalary * Number(tenant.payrollInsuranceRate) / 100 : 0
       const manualInsurance = deductionComponents.filter(c => /تأمين|gosi|insurance/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
       const insuranceDeduction = automaticInsurance > 0 ? automaticInsurance : manualInsurance
       const deductions = insuranceDeduction + deductionComponents.filter(c => !/تأمين|gosi|insurance/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)

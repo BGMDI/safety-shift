@@ -1,0 +1,2 @@
+ALTER TABLE "tenants"
+ADD COLUMN "payrollInsuranceRate" DECIMAL(5,2) NOT NULL DEFAULT 0;

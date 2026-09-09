@@ -7,7 +7,7 @@ export class SalaryService {
   async getEmployeeSalary(tenantId: string, employeeId: string) {
     const employee = await prisma.employee.findFirst({
       where: { id: employeeId, tenantId },
-      select: { id: true, fullName: true, employeeCode: true, jobGrade: true,
+      select: { id: true, fullName: true, employeeCode: true, jobGrade: true, tenant: { select: { payrollInsuranceRate: true } },
         jobTitle: { select: { name: true, baseSalary: true, gradeIncrement: true, housingAllowance: true, transportAllowance: true, otherAllowance: true, insuranceRate: true, customAllowances: true } } },
     })
     if (!employee) throw new NotFoundException('الموظف غير موجود')
@@ -19,12 +19,15 @@ export class SalaryService {
 
     const job = employee.jobTitle
     const grade = employee.jobGrade ?? 1
-    const jobBase = job ? Number(job.baseSalary) + (grade - 1) * Number(job.gradeIncrement) : 0
+    const jobGross = job ? Number(job.baseSalary) + (grade - 1) * Number(job.gradeIncrement) : 0
+    const jobBase = jobGross * 0.65
+    const housingAllowance = jobGross * 0.25
+    const transportAllowance = jobGross * 0.10
     const custom = Array.isArray(job?.customAllowances) ? job.customAllowances as { name: string; amount: number }[] : []
     const jobComponents = job ? [
-      { id: 'job:base', type: 'BASE', name: `الراتب الأساسي — الدرجة ${grade}`, amount: jobBase, effectiveDate: '', locked: true },
-      { id: 'job:housing', type: 'ALLOWANCE', name: 'بدل السكن', amount: Number(job.housingAllowance), effectiveDate: '', locked: true },
-      { id: 'job:transport', type: 'ALLOWANCE', name: 'بدل المواصلات', amount: Number(job.transportAllowance), effectiveDate: '', locked: true },
+      { id: 'job:base', type: 'BASE', name: `الراتب الأساسي 65% — الدرجة ${grade}`, amount: jobBase, effectiveDate: '', locked: true },
+      { id: 'job:housing', type: 'ALLOWANCE', name: 'بدل السكن 25%', amount: housingAllowance, effectiveDate: '', locked: true },
+      { id: 'job:transport', type: 'ALLOWANCE', name: 'بدل المواصلات 10%', amount: transportAllowance, effectiveDate: '', locked: true },
       { id: 'job:other', type: 'ALLOWANCE', name: 'بدلات أخرى', amount: Number(job.otherAllowance), effectiveDate: '', locked: true },
       ...custom.map((item, index) => ({ id: `job:custom:${index}`, type: 'ALLOWANCE', name: item.name, amount: Number(item.amount), effectiveDate: '', locked: true })),
     ].filter(component => component.type === 'BASE' || component.amount > 0) : []
@@ -32,8 +35,9 @@ export class SalaryService {
     const base = job ? jobBase : manualBase
     const jobAllowances = jobComponents.filter(c => c.type === 'ALLOWANCE').reduce((sum, component) => sum + component.amount, 0)
     const allowances = jobAllowances + components.filter(c => c.type === 'ALLOWANCE').reduce((s, c) => s + Number(c.amount), 0)
-    const insuranceDeduction = job ? jobBase * Number(job.insuranceRate) / 100 : 0
-    if (insuranceDeduction > 0) jobComponents.push({ id: 'job:insurance', type: 'DEDUCTION', name: `استقطاع التأمينات (${Number(job!.insuranceRate)}٪)`, amount: insuranceDeduction, effectiveDate: '', locked: true })
+    const insuranceRate = Number(employee.tenant.payrollInsuranceRate)
+    const insuranceDeduction = job ? jobGross * insuranceRate / 100 : 0
+    if (insuranceDeduction > 0) jobComponents.push({ id: 'job:insurance', type: 'DEDUCTION', name: `استقطاع التأمينات (${insuranceRate}٪)`, amount: insuranceDeduction, effectiveDate: '', locked: true })
     const manualDeductions = components.filter(c => c.type === 'DEDUCTION' && (insuranceDeduction <= 0 || !/تأمين|gosi|insurance/i.test(c.name)))
     const deductions = insuranceDeduction + manualDeductions.reduce((s, c) => s + Number(c.amount), 0)
 
