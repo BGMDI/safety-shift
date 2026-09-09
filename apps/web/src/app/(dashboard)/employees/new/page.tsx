@@ -24,7 +24,8 @@ const schema = z.object({
   familyName:       z.string().optional(),
   branchId:         z.string().min(1, 'اختر الفرع'),
   departmentId: z.string().optional(),
-  jobTitleId:   z.string().optional(),
+  jobTitleId:   z.string().min(1, 'اختر المسمى الوظيفي'),
+  jobGrade:     z.coerce.number().int().min(1, 'اختر الدرجة الوظيفية'),
   hireDate:     z.string().min(1, 'مطلوب'),
   email:        z.string().email('بريد غير صالح').optional().or(z.literal('')),
   phone:        z.string().optional(),
@@ -45,11 +46,15 @@ export default function NewEmployeePage() {
   const [loadingCode, setLoadingCode] = useState(false)
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([])
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
-  const [jobTitles, setJobTitles] = useState<{ id: string; name: string }[]>([])
+  const [jobTitles, setJobTitles] = useState<{ id: string; name: string; baseSalary: number; maxGrade: number; gradeIncrement: number; housingAllowance: number; transportAllowance: number; otherAllowance: number; customAllowances: { name: string; amount: number }[] }[]>([])
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
+    defaultValues: { jobTitleId: '', jobGrade: 1 },
   })
+  const selectedJobId = watch('jobTitleId')
+  const selectedGrade = watch('jobGrade') || 1
+  const selectedJob = jobTitles.find(job => job.id === selectedJobId)
 
   const activePrefix = customPrefix.trim().toUpperCase() || prefix
 
@@ -94,7 +99,8 @@ export default function NewEmployeePage() {
         email:        data.email        || undefined,
         password:     data.password     || undefined,
         departmentId: data.departmentId || undefined,
-        jobTitleId:   data.jobTitleId   || undefined,
+        jobTitleId: data.jobTitleId,
+        jobGrade: data.jobGrade,
         fatherName:       data.fatherName       || undefined,
         grandfatherName:  data.grandfatherName  || undefined,
         familyName:       data.familyName       || undefined,
@@ -210,13 +216,20 @@ export default function NewEmployeePage() {
 
         {/* Row 3 */}
         <div className="grid grid-cols-2 gap-4">
-          <Field label="الوظيفة" error={errors.jobTitleId?.message}>
+          <Field label="المسمى الوظيفي *" error={errors.jobTitleId?.message}>
             <select {...register('jobTitleId')} className={input}>
-              <option value="">بدون وظيفة</option>
+              <option value="">اختر من الوظائف المعرفة</option>
               {jobTitles.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
             </select>
           </Field>
+          <Field label="الدرجة الوظيفية *" error={errors.jobGrade?.message}>
+            <select {...register('jobGrade', { valueAsNumber: true })} disabled={!selectedJob} className={input}>
+              {Array.from({ length: selectedJob?.maxGrade ?? 1 }, (_, index) => <option key={index + 1} value={index + 1}>الدرجة {index + 1}</option>)}
+            </select>
+          </Field>
         </div>
+
+        {selectedJob ? <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4"><p className="text-xs font-bold text-blue-700">الراتب المحتسب تلقائيًا</p><div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"><span>الأساسي: <strong>{(Number(selectedJob.baseSalary) + (selectedGrade - 1) * Number(selectedJob.gradeIncrement)).toLocaleString('ar-SA')} ر.س</strong></span><span>السكن: <strong>{Number(selectedJob.housingAllowance).toLocaleString('ar-SA')} ر.س</strong></span><span>المواصلات: <strong>{Number(selectedJob.transportAllowance).toLocaleString('ar-SA')} ر.س</strong></span><span>بدلات أخرى: <strong>{Number(selectedJob.otherAllowance).toLocaleString('ar-SA')} ر.س</strong></span></div></div> : null}
 
         <hr className="border-gray-100" />
 

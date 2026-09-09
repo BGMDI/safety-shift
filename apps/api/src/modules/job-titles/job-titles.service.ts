@@ -20,7 +20,10 @@ export class JobTitlesService {
     }
     if (additions.length) {
       await prisma.jobTitle.createMany({ data: additions.map(row => ({
-        tenantId, name: row.name.trim(), grade: row.grade.trim(), baseSalary: row.baseSalary!, isShiftEligible: row.isShiftEligible!,
+        tenantId, name: row.name.trim(), grade: 'الدرجة 1', baseSalary: row.baseSalary!, isShiftEligible: row.isShiftEligible!,
+        maxGrade: row.maxGrade!, gradeIncrement: row.gradeIncrement!, housingAllowance: row.housingAllowance!,
+        transportAllowance: row.transportAllowance!, otherAllowance: row.otherAllowance!, customAllowances: row.customAllowances,
+        insuranceRate: row.insuranceRate!,
       })) })
     }
     return { total: rows.length, added: additions.length, rejected: errors.length, skipped: skippedRows.length, errors, skippedRows }
@@ -36,14 +39,21 @@ export class JobTitlesService {
 
   async create(tenantId: string, dto: CreateJobTitleDto) {
     return prisma.jobTitle.create({
-      data: { tenantId, name: dto.name, grade: dto.grade, baseSalary: dto.baseSalary ?? 0, isShiftEligible: dto.isShiftEligible ?? true },
+      data: {
+        tenantId, name: dto.name.trim(), grade: 'الدرجة 1', baseSalary: dto.baseSalary ?? 0,
+        maxGrade: dto.maxGrade, gradeIncrement: dto.gradeIncrement,
+        housingAllowance: dto.housingAllowance, transportAllowance: dto.transportAllowance,
+        otherAllowance: dto.otherAllowance, customAllowances: (dto.customAllowances ?? []) as any,
+        insuranceRate: dto.insuranceRate,
+        isShiftEligible: dto.isShiftEligible ?? true,
+      },
     })
   }
 
   async update(tenantId: string, id: string, dto: UpdateJobTitleDto) {
     const existing = await prisma.jobTitle.findFirst({ where: { id, tenantId } })
     if (!existing) throw new NotFoundException('الوظيفة غير موجودة')
-    return prisma.jobTitle.update({ where: { id }, data: dto })
+    return prisma.jobTitle.update({ where: { id }, data: { ...dto, name: dto.name?.trim(), customAllowances: dto.customAllowances as any } })
   }
 
   async remove(tenantId: string, id: string) {

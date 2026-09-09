@@ -64,7 +64,7 @@ export class PayrollService {
 
     const employees = await prisma.employee.findMany({
       where: { tenantId, status: 'ACTIVE' },
-      include: { salaryComponents: true },
+      include: { salaryComponents: true, jobTitle: true },
     })
 
     const start = new Date(year, month - 1, 1)
@@ -78,16 +78,27 @@ export class PayrollService {
     let total = 0
     for (const emp of employees) {
       const base = emp.salaryComponents.find(c => c.type === 'BASE')
-      const baseSalary = Number(base?.amount ?? 0)
-      const allowanceComponents = emp.salaryComponents.filter(c => c.type === 'ALLOWANCE')
+      const baseSalary = emp.jobTitle
+        ? Number(emp.jobTitle.baseSalary) + ((emp.jobGrade ?? 1) - 1) * Number(emp.jobTitle.gradeIncrement)
+        : Number(base?.amount ?? 0)
+      const customJobAllowances = Array.isArray(emp.jobTitle?.customAllowances) ? emp.jobTitle.customAllowances as { name: string; amount: number }[] : []
+      const jobAllowances = emp.jobTitle ? [
+        { name: 'بدل السكن', amount: emp.jobTitle.housingAllowance },
+        { name: 'بدل المواصلات', amount: emp.jobTitle.transportAllowance },
+        { name: 'بدلات أخرى', amount: emp.jobTitle.otherAllowance },
+        ...customJobAllowances,
+      ].filter(component => Number(component.amount) > 0) : []
+      const allowanceComponents = [...jobAllowances, ...emp.salaryComponents.filter(c => c.type === 'ALLOWANCE')]
       const housingAllowance = allowanceComponents.filter(c => /سكن|housing/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
       const bonusAmount = allowanceComponents.filter(c => /مكاف|bonus|reward/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
       const regularAllowances = allowanceComponents.filter(c => !/سكن|housing|مكاف|bonus|reward/i.test(c.name))
       const regularAllowanceTotal = regularAllowances.reduce((s, c) => s + Number(c.amount), 0)
       const allowances = housingAllowance + regularAllowanceTotal + bonusAmount
       const deductionComponents = emp.salaryComponents.filter(c => c.type === 'DEDUCTION')
-      const insuranceDeduction = deductionComponents.filter(c => /تأمين|gosi|insurance/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
-      const deductions = deductionComponents.reduce((s, c) => s + Number(c.amount), 0)
+      const automaticInsurance = emp.jobTitle ? baseSalary * Number(emp.jobTitle.insuranceRate) / 100 : 0
+      const manualInsurance = deductionComponents.filter(c => /تأمين|gosi|insurance/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
+      const insuranceDeduction = automaticInsurance > 0 ? automaticInsurance : manualInsurance
+      const deductions = insuranceDeduction + deductionComponents.filter(c => !/تأمين|gosi|insurance/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)
 
       const attendanceLogs = await prisma.attendanceLog.findMany({
         where: { tenantId, employeeId: emp.id, date: { gte: start, lte: end } },

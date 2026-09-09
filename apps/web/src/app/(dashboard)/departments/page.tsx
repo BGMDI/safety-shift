@@ -13,7 +13,9 @@ interface EmpOption { id: string; fullName: string; employeeCode: string }
 interface Dept     { id: string; name: string; headEmployeeId?: string | null; head?: EmpOption | null; _count: { employees: number } }
 interface Branch   { id: string; name: string; location: string | null; managerEmployeeId?: string | null; manager?: EmpOption | null; siteSupervisorEmployeeId?: string | null; siteSupervisor?: EmpOption | null; _count: { employees: number }; departments: Dept[] }
 interface FreeDept { id: string; name: string; branch: { id: string; name: string } | null; headEmployeeId?: string | null; head?: EmpOption | null; _count: { employees: number; children: number } }
-interface JobTitle { id: string; name: string; grade: string | null; baseSalary: number; isShiftEligible: boolean; _count: { employees: number } }
+interface Allowance { name: string; amount: number | string }
+interface JobTitle { id: string; name: string; baseSalary: number; maxGrade: number; gradeIncrement: number; housingAllowance: number; transportAllowance: number; otherAllowance: number; insuranceRate: number; customAllowances: Allowance[]; isShiftEligible: boolean; _count: { employees: number } }
+const emptyJob = { name: '', baseSalary: '', maxGrade: '1', gradeIncrement: '', housingAllowance: '', transportAllowance: '', otherAllowance: '', insuranceRate: '0', customAllowances: [] as Allowance[], isShiftEligible: true }
 
 const inp = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full bg-white'
 
@@ -427,32 +429,28 @@ function OrgTab() {
 ══════════════════════════════════════════ */
 function JobsTab() {
   const [titles, setTitles]   = useState<JobTitle[]>([])
-  const [form, setForm]       = useState({ name: '', grade: '', baseSalary: '', isShiftEligible: true })
+  const [form, setForm]       = useState(emptyJob)
   const [saving, setSaving]   = useState(false)
   const [editId, setEditId]   = useState<string | null>(null)
-  const [editData, setEditData] = useState({ name: '', grade: '', baseSalary: '' })
 
   const load = () => api.get('/job-titles').then(r => setTitles(r.data)).catch(() => {})
   useEffect(() => { load() }, [])
 
   const create = async () => {
-    if (!form.name.trim()) return
+    if (!form.name.trim() || !form.baseSalary || !form.maxGrade) return
     setSaving(true)
     await api.post('/job-titles', {
-      name: form.name,
-      grade: form.grade || undefined,
-      baseSalary: Number(form.baseSalary) || 0,
-      isShiftEligible: form.isShiftEligible,
+      ...form, name: form.name.trim(), baseSalary: Number(form.baseSalary), maxGrade: Number(form.maxGrade),
+      gradeIncrement: Number(form.gradeIncrement) || 0, housingAllowance: Number(form.housingAllowance) || 0,
+      transportAllowance: Number(form.transportAllowance) || 0, otherAllowance: Number(form.otherAllowance) || 0,
+      insuranceRate: Number(form.insuranceRate) || 0,
+      customAllowances: form.customAllowances.filter(item => item.name.trim()).map(item => ({ name: item.name.trim(), amount: Number(item.amount) || 0 })),
     }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
-    setForm({ name: '', grade: '', baseSalary: '', isShiftEligible: true }); setSaving(false); load()
+    setForm(emptyJob); setSaving(false); load()
   }
 
-  const update = async (id: string) => {
-    await api.put(`/job-titles/${id}`, {
-      name: editData.name,
-      grade: editData.grade || undefined,
-      baseSalary: Number(editData.baseSalary) || 0,
-    }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
+  const update = async (title: JobTitle) => {
+    await api.put(`/job-titles/${title.id}`, title).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
     setEditId(null); load()
   }
 
@@ -473,39 +471,20 @@ function JobsTab() {
 
       <JobTitlesImport onImported={load} />
 
-      {/* نموذج إضافة وظيفة */}
       <div className="wardiya-section p-6">
-        <div className="section-heading"><div><span>إضافة فردية</span><h2>مسمى وظيفي جديد</h2></div></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="field-group">
-            <label>المسمى الوظيفي <em>*</em></label>
-            <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && create()}
-              placeholder="مدير، محاسب، مهندس..." className={inp} />
-          </div>
-          <div className="field-group">
-            <label>الدرجة الوظيفية</label>
-            <input value={form.grade} onChange={e => setForm(p => ({ ...p, grade: e.target.value }))}
-              placeholder="أولى، ثانية، A1..." className={inp} />
-          </div>
-          <div className="field-group">
-            <label>الراتب الأساسي (ر.س)</label>
-            <input value={form.baseSalary} onChange={e => setForm(p => ({ ...p, baseSalary: e.target.value }))}
-              type="number" min="0" placeholder="0" className={inp} />
-          </div>
-        </div>
+        <div className="section-heading"><div><span>سلم الرواتب</span><h2>تعريف وظيفة جديدة</h2></div></div>
+        <JobSalaryFields value={form} onChange={setForm} />
         <label className="flex items-center gap-2 mt-3 text-sm text-gray-600 cursor-pointer w-fit">
           <input type="checkbox" checked={form.isShiftEligible}
             onChange={e => setForm(p => ({ ...p, isShiftEligible: e.target.checked }))} />
           تدخل في جدولة الشفتات (فعّلها للوظائف الميدانية مثل حارس أمن، مراقب أمن — عطّلها للوظائف الإدارية)
         </label>
-        <button onClick={create} disabled={saving || !form.name.trim()} className="btn-primary mt-5">
-          {saving ? '⏳ جارٍ...' : '+ إضافة مسمى وظيفي'}
+        <button onClick={create} disabled={saving || !form.name.trim() || !form.baseSalary} className="btn-primary mt-5">
+          {saving ? '⏳ جارٍ...' : '+ حفظ الوظيفة وسلمها المالي'}
         </button>
       </div>
 
-      {/* جدول الوظائف */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="space-y-3">
         {titles.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-14 text-gray-400">
             <p className="text-4xl mb-3">📋</p>
@@ -513,75 +492,32 @@ function JobsTab() {
             <p className="text-sm mt-1">أضف أول مسمى وظيفي من النموذج أعلاه</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                {['المسمى الوظيفي', 'الدرجة', 'الراتب الأساسي', 'جدولة الشفتات', 'الموظفون', ''].map(h => (
-                  <th key={h} className="text-right px-4 py-3 font-medium text-gray-600 text-sm">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {titles.map(t => (
-                <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-800">
-                    {editId === t.id
-                      ? <input value={editData.name} onChange={e => setEditData(p => ({ ...p, name: e.target.value }))}
-                          className="border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-36" autoFocus />
-                      : t.name}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {editId === t.id
-                      ? <input value={editData.grade} onChange={e => setEditData(p => ({ ...p, grade: e.target.value }))}
-                          className="border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-24" />
-                      : (t.grade
-                          ? <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{t.grade}</span>
-                          : <span className="text-gray-300">—</span>)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {editId === t.id
-                      ? <input value={editData.baseSalary} type="number" min="0"
-                          onChange={e => setEditData(p => ({ ...p, baseSalary: e.target.value }))}
-                          className="border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-28" />
-                      : <span className="font-mono text-gray-700">{Number(t.baseSalary).toLocaleString('ar-SA')} ر.س</span>}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button onClick={() => toggleShiftEligible(t)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
-                        t.isShiftEligible ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
-                      {t.isShiftEligible ? '✓ تدخل الجدولة' : '— إدارية فقط'}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full text-xs font-medium">
-                      {t._count.employees}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 justify-end">
-                      {editId === t.id ? (
-                        <>
-                          <button onClick={() => update(t.id)}
-                            className="text-green-600 text-xs px-3 py-1.5 rounded-lg hover:bg-green-50">✓ حفظ</button>
-                          <button onClick={() => setEditId(null)}
-                            className="text-gray-400 text-xs px-3 py-1.5 rounded-lg hover:bg-gray-50">إلغاء</button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => { setEditId(t.id); setEditData({ name: t.name, grade: t.grade ?? '', baseSalary: String(t.baseSalary) }) }}
-                            className="text-blue-600 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-50">تعديل</button>
-                          <button onClick={() => remove(t.id)}
-                            className="text-red-500 text-xs px-3 py-1.5 rounded-lg hover:bg-red-50">حذف</button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          titles.map(t => <article key={t.id} className="wardiya-section p-5">
+            {editId === t.id ? <><JobSalaryFields value={t} onChange={next => setTitles(list => list.map(item => item.id === t.id ? { ...item, ...next } as JobTitle : item))} /><div className="mt-4 flex gap-2"><button onClick={() => update(t)} className="btn-primary">حفظ التعديلات</button><button onClick={() => { setEditId(null); load() }} className="btn-secondary">إلغاء</button></div></> : <>
+              <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-lg font-black">{t.name}</h3><p className="mt-1 text-xs text-slate-500">{t.maxGrade} درجات · زيادة {Number(t.gradeIncrement).toLocaleString('ar-SA')} ر.س لكل درجة · {t._count.employees} موظف</p></div><div className="flex gap-2"><button onClick={() => toggleShiftEligible(t)} className="btn-secondary">{t.isShiftEligible ? '✓ ضمن الشفتات' : 'إدارية'}</button><button onClick={() => setEditId(t.id)} className="btn-secondary">تعديل</button><button onClick={() => remove(t.id)} className="text-red-600 px-3 text-sm">حذف</button></div></div>
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">{[['راتب الدرجة 1', t.baseSalary], ['السكن', t.housingAllowance], ['المواصلات', t.transportAllowance], ['بدلات أخرى', t.otherAllowance], ['التأمينات', `${t.insuranceRate}٪`]].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><span className="block text-xs text-slate-500">{label}</span><strong className="mt-1 block text-sm">{typeof value === 'number' ? `${Number(value).toLocaleString('ar-SA')} ر.س` : value}</strong></div>)}</div>
+              {t.customAllowances?.length ? <div className="mt-3 flex flex-wrap gap-2">{t.customAllowances.map((item, index) => <span key={`${item.name}-${index}`} className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">{item.name}: {Number(item.amount).toLocaleString('ar-SA')} ر.س</span>)}</div> : null}
+            </>}
+          </article>)
         )}
       </div>
     </div>
   )
+}
+
+function JobSalaryFields({ value, onChange }: { value: typeof emptyJob | JobTitle; onChange: (value: any) => void }) {
+  const set = (key: string, next: any) => onChange({ ...value, [key]: next })
+  return <div className="space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="field-group md:col-span-2"><label>المسمى الوظيفي <em>*</em></label><input value={value.name} onChange={e => set('name', e.target.value)} placeholder="مثال: حارس أمن" className={inp} /></div>
+      <div className="field-group"><label>عدد الدرجات <em>*</em></label><input type="number" min="1" max="100" value={value.maxGrade} onChange={e => set('maxGrade', e.target.value)} className={inp} /></div>
+      <div className="field-group"><label>راتب الدرجة الأولى <em>*</em></label><input type="number" min="0" value={value.baseSalary} onChange={e => set('baseSalary', e.target.value)} className={inp} /></div>
+      <div className="field-group"><label>الزيادة لكل درجة</label><input type="number" min="0" value={value.gradeIncrement} onChange={e => set('gradeIncrement', e.target.value)} className={inp} /></div>
+      <div className="field-group"><label>بدل السكن</label><input type="number" min="0" value={value.housingAllowance} onChange={e => set('housingAllowance', e.target.value)} className={inp} /></div>
+      <div className="field-group"><label>بدل المواصلات</label><input type="number" min="0" value={value.transportAllowance} onChange={e => set('transportAllowance', e.target.value)} className={inp} /></div>
+      <div className="field-group"><label>بدلات أخرى</label><input type="number" min="0" value={value.otherAllowance} onChange={e => set('otherAllowance', e.target.value)} className={inp} /></div>
+      <div className="field-group"><label>استقطاع التأمينات (%)</label><input type="number" min="0" max="100" step="0.01" value={value.insuranceRate} onChange={e => set('insuranceRate', e.target.value)} className={inp} /></div>
+    </div>
+    <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/40 p-4"><div className="flex items-center justify-between"><div><strong className="text-sm">بدلات إضافية مسماة</strong><p className="text-xs text-slate-500">مثل بدل خطر أو بدل موقع.</p></div><button type="button" className="btn-secondary" onClick={() => set('customAllowances', [...(value.customAllowances ?? []), { name: '', amount: '' }])}>+ إضافة بدل آخر</button></div>{value.customAllowances?.map((item, index) => <div key={index} className="mt-3 grid grid-cols-[1fr_160px_auto] gap-2"><input value={item.name} onChange={e => set('customAllowances', value.customAllowances.map((current, i) => i === index ? { ...current, name: e.target.value } : current))} placeholder="اسم البدل" className={inp} /><input type="number" min="0" value={item.amount} onChange={e => set('customAllowances', value.customAllowances.map((current, i) => i === index ? { ...current, amount: e.target.value } : current))} placeholder="المبلغ" className={inp} /><button type="button" className="px-3 text-red-600" onClick={() => set('customAllowances', value.customAllowances.filter((_, i) => i !== index))}>حذف</button></div>)}</div>
+  </div>
 }

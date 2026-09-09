@@ -65,7 +65,7 @@ export function JobTitlesImport({ onImported }: { onImported: () => void }) {
     </button>
     {open ? <div className="section-body space-y-5">
       <div className="info-panel">
-        نزّل القالب ثم أدخل المسمى والدرجة والراتب الأساسي، وحدد هل يدخل المسمى في جدولة الشفتات. جميع أعمدة القالب مطلوبة.
+        نزّل القالب ثم أدخل المسمى وسلم الدرجات والراتب والبدلات ونسبة التأمينات، وحدد هل تدخل الوظيفة في جدولة الشفتات. يمكن إضافة بدلات مسماة بصيغة موضحة داخل القالب.
       </div>
       <div className="flex flex-wrap gap-3 items-center">
         <button type="button" onClick={downloadTemplate} disabled={busy} className="btn-secondary"><Download size={17} /> تنزيل القالب</button>

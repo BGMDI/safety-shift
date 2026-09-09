@@ -1,4 +1,5 @@
-import { IsString, IsEmail, IsOptional, IsDateString, MinLength, IsUUID } from 'class-validator'
+import { IsString, IsEmail, IsOptional, IsDateString, MinLength, IsUUID, IsInt, Min } from 'class-validator'
+import { Type } from 'class-transformer'
 
 export class CreateEmployeeDto {
   @IsOptional() @IsString() employeeCode?: string
@@ -12,7 +13,9 @@ export class CreateEmployeeDto {
   @IsUUID()   branchId!: string
 
   @IsOptional() @IsUUID()       departmentId?: string
-  @IsOptional() @IsUUID()       jobTitleId?: string
+  @IsUUID()                     jobTitleId!: string
+  @Type(() => Number) @IsInt() @Min(1) jobGrade!: number
+  @IsOptional() @IsString()     jobTitleName?: string
   @IsDateString()               hireDate!: string
   @IsOptional() @IsEmail()      email?: string
   @IsOptional() @IsString()     phone?: string

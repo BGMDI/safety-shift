@@ -6,7 +6,7 @@ import { useAuth } from '../../../../../hooks/useAuth'
 
 interface SalaryData {
   employee: { fullName: string; employeeCode: string; jobTitle?: { name: string }; department?: { name: string }; hireDate: string }
-  components: { id: string; type: string; name: string; amount: number; effectiveDate: string }[]
+  components: { id: string; type: string; name: string; amount: number; effectiveDate: string; locked?: boolean }[]
   summary: { base: number; allowances: number; deductions: number; net: number }
 }
 
@@ -180,7 +180,7 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
           🪪 طباعة البطاقة الوظيفية
         </button>
         <button onClick={() => setShowForm(!showForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
-          + إضافة مكوّن
+          + إضافة بدل أو حسم خاص
         </button>
       </div>
 
@@ -202,12 +202,12 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
       {/* Add component form */}
       {showForm && (
         <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-          <h2 className="font-semibold mb-4">إضافة مكوّن راتب</h2>
+          <h2 className="font-semibold mb-1">إضافة بدل أو حسم خاص بالموظف</h2>
+          <p className="mb-4 text-xs text-slate-500">الراتب الأساسي وبدلات الوظيفة والتأمينات تأتي تلقائيًا من المسمى والدرجة.</p>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">النوع</label>
               <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} className={inp}>
-                <option value="BASE">راتب أساسي</option>
                 <option value="ALLOWANCE">بدل</option>
                 <option value="DEDUCTION">حسم</option>
               </select>
@@ -244,7 +244,7 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
           </thead>
           <tbody className="divide-y">
             {data.components.length === 0
-              ? <tr><td colSpan={5} className="text-center py-10 text-gray-400">لا توجد مكونات راتب — أضف الراتب الأساسي أولاً</td></tr>
+              ? <tr><td colSpan={5} className="text-center py-10 text-gray-400">لم يُعرّف سلم راتب لهذه الوظيفة بعد</td></tr>
               : data.components.map(c => (
                 <tr key={c.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium">{c.name}</td>
@@ -256,9 +256,9 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
                       {Number(c.amount).toLocaleString('ar-SA')} ر.س
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{new Date(c.effectiveDate).toLocaleDateString('ar-SA')}</td>
+                  <td className="px-4 py-3 text-gray-500">{c.locked ? 'مستمر' : new Date(c.effectiveDate).toLocaleDateString('ar-SA')}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => remove(c.id)} className="text-red-500 text-xs hover:underline">حذف</button>
+                    {c.locked ? <span className="text-xs text-slate-400">من سلم الوظيفة</span> : <button onClick={() => remove(c.id)} className="text-red-500 text-xs hover:underline">حذف</button>}
                   </td>
                 </tr>
               ))}

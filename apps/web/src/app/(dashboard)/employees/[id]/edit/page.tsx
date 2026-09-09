@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { api } from '../../../../../lib/api'
 import { useAuth } from '../../../../../hooks/useAuth'
 
-interface SelectOption { id: string; name: string }
+interface SelectOption { id: string; name: string; maxGrade?: number }
 interface EmployeeData {
   id: string; fullName: string
   firstName: string | null; fatherName: string | null
@@ -19,6 +19,7 @@ interface EmployeeData {
   branch: { id: string; name: string } | null
   department: { id: string; name: string } | null
   jobTitle: { id: string; name: string } | null
+  jobGrade: number | null
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
@@ -86,7 +87,7 @@ export default function EditEmployeePage() {
     email: '', phone: '', nationalId: '',
     idExpiryDate: '', nationality: '',
     birthDate: '', qualification: '', specialization: '', iban: '',
-    hireDate: '', branchId: '', departmentId: '', jobTitleId: '',
+    hireDate: '', branchId: '', departmentId: '', jobTitleId: '', jobGrade: '1',
     status: 'ACTIVE', password: '',
   })
 
@@ -117,6 +118,7 @@ export default function EditEmployeePage() {
         branchId:     e.branch?.id   ?? '',
         departmentId: e.department?.id ?? '',
         jobTitleId:   e.jobTitle?.id   ?? '',
+        jobGrade:     String(e.jobGrade ?? 1),
         status:       e.status,
         password:     '',
       })
@@ -167,6 +169,7 @@ export default function EditEmployeePage() {
         branchId:     form.branchId     || undefined,
         departmentId: form.departmentId || undefined,
         jobTitleId:   form.jobTitleId   || undefined,
+        jobGrade:     Number(form.jobGrade),
         status:       form.status,
         password:     form.password     || undefined,
       })
@@ -364,7 +367,7 @@ export default function EditEmployeePage() {
 
         {/* ══ الهيكل التنظيمي ══ */}
         <Section title="الهيكل التنظيمي">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Field label="الفرع">
               <select value={form.branchId} onChange={e => set('branchId', e.target.value)} className={inp}>
                 <option value="">-- الفرع --</option>
@@ -377,10 +380,15 @@ export default function EditEmployeePage() {
                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </Field>
-            <Field label="الوظيفة">
-              <select value={form.jobTitleId} onChange={e => set('jobTitleId', e.target.value)} className={inp}>
-                <option value="">بدون وظيفة</option>
+            <Field label="المسمى الوظيفي *">
+              <select required value={form.jobTitleId} onChange={e => { setForm(current => ({ ...current, jobTitleId: e.target.value, jobGrade: '1' })) }} className={inp}>
+                <option value="">اختر الوظيفة</option>
                 {jobTitles.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
+              </select>
+            </Field>
+            <Field label="الدرجة الوظيفية *">
+              <select required value={form.jobGrade} onChange={e => set('jobGrade', e.target.value)} className={inp}>
+                {Array.from({ length: jobTitles.find(job => job.id === form.jobTitleId)?.maxGrade ?? 1 }, (_, index) => <option key={index + 1} value={index + 1}>الدرجة {index + 1}</option>)}
               </select>
             </Field>
           </div>

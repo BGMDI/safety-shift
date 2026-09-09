@@ -7,7 +7,7 @@ async function run() {
   const workbook = new Workbook()
   await workbook.xlsx.load(await employeeTemplate())
   const sheet = workbook.worksheets[0]
-  const complete = ['أحمد', 'محمد', 'عبدالله', 'العلي', '2026-09-08', 'ahmad@example.com', '0501234567', '0012345678', 'سعودي', '1990-01-01', '2030-01-01', 'بكالوريوس', 'إدارة أعمال', 'SA0380000000608010167519']
+  const complete = ['أحمد', 'محمد', 'عبدالله', 'العلي', '2026-09-08', 'ahmad@example.com', '0501234567', '0012345678', 'سعودي', '1990-01-01', '2030-01-01', 'بكالوريوس', 'إدارة أعمال', 'SA0380000000608010167519', 'حارس أمن', 2]
   sheet.addRow(complete)
   sheet.addRow(complete.map((value, index) => index === 4 ? new Date('2026-09-01T00:00:00Z') : value))
   sheet.addRow(['', '', '', '', 'not-a-date'])

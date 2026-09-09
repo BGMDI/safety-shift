@@ -58,7 +58,7 @@ export function EmployeeImport({ onImported }: { onImported: () => void }) {
       <button type="button" className="border border-blue-600 text-blue-700 rounded-lg px-4 py-2 text-sm" aria-expanded={open} onClick={() => setOpen(!open)}>استيراد الموظفين من Excel</button>
       {open ? <section aria-label="استيراد الموظفين" className="mt-3 rounded-xl border bg-white p-5 space-y-4">
         <h2 className="font-bold">رفع بيانات الموظفين</h2>
-        <p className="text-sm text-gray-600">نزّل القالب واملأ جميع حقوله ثم اختر الفرع. جميع أعمدة القالب إلزامية لكل موظف، ويُرفض أي صف ينقصه حقل. التواريخ ميلادية بصيغة YYYY-MM-DD. الحد الأقصى 500 موظف و2 ميجابايت.</p>
+        <p className="text-sm text-gray-600">نزّل القالب واملأ جميع حقوله ثم اختر الفرع. المسمى الوظيفي والدرجة إلزاميان، ويجب أن يكون المسمى معرفًا مسبقًا في الهيكل التنظيمي. التواريخ ميلادية بصيغة YYYY-MM-DD. الحد الأقصى 500 موظف و2 ميجابايت.</p>
         <p className="text-sm text-gray-600">تُضاف الصفوف السليمة فقط ولا تُعدّل البيانات الموجودة. الرقم الوظيفي يولد تلقائياً. عند وجود أخطاء، أعد رفع الصفوف المرفوضة فقط. كلمات المرور تُضبط لاحقاً من ملف الموظف.</p>
         <button type="button" onClick={download} disabled={busy} className="text-blue-700 underline">تنزيل قالب Excel</button>
         <div className="flex flex-wrap gap-4 items-end">

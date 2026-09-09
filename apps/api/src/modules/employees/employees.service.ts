@@ -50,9 +50,15 @@ export class EmployeesService {
       throw new BadRequestException('اختر فرعاً تابعاً للشركة')
     }
     const rows = await parseEmployees(buffer, branchId)
+    const jobTitles = await prisma.jobTitle.findMany({ where: { tenantId } })
+    const jobsByName = new Map(jobTitles.map(job => [job.name.trim().toLocaleLowerCase('ar'), job]))
     const errors: { row: number; message: string }[] = []
     let imported = 0
     for (const row of rows) {
+      const job = jobsByName.get((row.dto.jobTitleName ?? '').trim().toLocaleLowerCase('ar'))
+      if (!job) row.errors.push('المسمى الوظيفي غير موجود في النظام؛ عرّفه أولاً من الهيكل التنظيمي')
+      else if (row.dto.jobGrade > job.maxGrade) row.errors.push(`الدرجة الوظيفية تتجاوز أعلى درجة (${job.maxGrade}) لهذه الوظيفة`)
+      else row.dto.jobTitleId = job.id
       if (row.errors.length) { errors.push({ row: row.row, message: row.errors.join('؛ ') }); continue }
       try {
         await this.create(tenantId, row.dto)
@@ -87,7 +93,8 @@ export class EmployeesService {
     createdAt: true,
     branch: { select: { id: true, name: true } },
     department: { select: { id: true, name: true } },
-    jobTitle: { select: { id: true, name: true, isShiftEligible: true } },
+    jobGrade: true,
+    jobTitle: { select: { id: true, name: true, isShiftEligible: true, baseSalary: true, maxGrade: true, gradeIncrement: true, housingAllowance: true, transportAllowance: true, otherAllowance: true, customAllowances: true } },
     employeeRoles: { select: { role: { select: { name: true } } } },
   }
 
@@ -164,6 +171,10 @@ export class EmployeesService {
     })
     if (existing) throw new ConflictException('كود الموظف مستخدم مسبقاً')
 
+    const jobTitle = await prisma.jobTitle.findFirst({ where: { id: dto.jobTitleId, tenantId } })
+    if (!jobTitle) throw new BadRequestException('اختر مسمى وظيفياً معرّفاً في النظام')
+    if (dto.jobGrade > jobTitle.maxGrade) throw new BadRequestException(`أعلى درجة متاحة لوظيفة ${jobTitle.name} هي ${jobTitle.maxGrade}`)
+
     const email = normalizeEmail(dto.email)
     if (email) {
       // الفهرس الفريد حسّاس لحالة الأحرف، فبريدان يختلفان بالحالة يمرّان كحسابين ويلتبس الدخول بينهما
@@ -189,6 +200,7 @@ export class EmployeesService {
           branchId: dto.branchId,
           departmentId: dto.departmentId,
           jobTitleId: dto.jobTitleId,
+          jobGrade: dto.jobGrade,
           employeeCode: code,
           fullName,
           firstName: dto.firstName,
@@ -217,9 +229,17 @@ export class EmployeesService {
   }
 
   async update(tenantId: string, id: string, dto: UpdateEmployeeDto) {
-    await this.findOne(tenantId, id)
+    const employee = await this.findOne(tenantId, id)
     const { password, hireDate, idExpiryDate, birthDate, firstName, fatherName, grandfatherName, familyName, ...rest } = dto as any
     const data: any = { ...rest }
+    if (dto.jobTitleId !== undefined || dto.jobGrade !== undefined) {
+      const jobTitleId = dto.jobTitleId ?? employee.jobTitle?.id
+      const jobGrade = dto.jobGrade ?? employee.jobGrade
+      if (!jobTitleId || !jobGrade) throw new BadRequestException('المسمى الوظيفي والدرجة الوظيفية مطلوبان')
+      const jobTitle = await prisma.jobTitle.findFirst({ where: { id: jobTitleId, tenantId } })
+      if (!jobTitle) throw new BadRequestException('المسمى الوظيفي غير موجود')
+      if (jobGrade > jobTitle.maxGrade) throw new BadRequestException(`أعلى درجة متاحة لوظيفة ${jobTitle.name} هي ${jobTitle.maxGrade}`)
+    }
     if (hireDate)      data.hireDate      = new Date(hireDate)
     if (idExpiryDate)  data.idExpiryDate  = new Date(idExpiryDate)
     if (birthDate)     data.birthDate     = new Date(birthDate)

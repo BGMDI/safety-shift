@@ -9,6 +9,7 @@ export const importColumns = [
   ['phone', 'الجوال'], ['nationalId', 'رقم الهوية'], ['nationality', 'الجنسية'],
   ['birthDate', 'تاريخ الميلاد'], ['idExpiryDate', 'انتهاء الهوية'],
   ['qualification', 'المؤهل الدراسي'], ['specialization', 'التخصص'], ['iban', 'IBAN'],
+  ['jobTitleName', 'المسمى الوظيفي'], ['jobGrade', 'الدرجة الوظيفية'],
 ] as const
 
 export async function employeeTemplate() {
@@ -19,7 +20,7 @@ export async function employeeTemplate() {
   const help = workbook.addWorksheet('التعليمات')
   help.addRows([
     ['أدخل الموظفين في الورقة الأولى دون تغيير عناوين الأعمدة.'],
-    ['جميع أعمدة القالب إلزامية لكل موظف. اختر الفرع من شاشة الاستيراد.'],
+    ['جميع أعمدة القالب إلزامية لكل موظف. المسمى الوظيفي يجب أن يكون معرفاً مسبقاً في الهيكل التنظيمي.'],
     ['التواريخ ميلادية بصيغة YYYY-MM-DD، والجوال والهوية نصوص للمحافظة على الأصفار.'],
     ['الحد الأقصى 500 موظف. تتم إضافة الصفوف السليمة فقط دون تعديل الموظفين الموجودين.'],
     ['الرقم الوظيفي يولد تلقائياً. لا تُنشأ كلمات مرور من الملف؛ تُضبط من ملف الموظف.'],
@@ -69,9 +70,12 @@ export async function parseEmployees(buffer: Buffer, branchId: string) {
       const value = dateValue ? dateValue.toISOString().slice(0, 10) : cell.text.trim()
       if (value.length > 250) errors.push(`${header}: القيمة طويلة جداً`)
       if (isDate && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) errors.push(`${header}: استخدم تاريخاً صحيحاً بصيغة YYYY-MM-DD`)
-      dto[key] = value
+      ;(dto as any)[key] = key === 'jobGrade' ? Number(value) : value
     }
     if (!dto.firstName) errors.push('الاسم الأول مطلوب')
+    // يتحقق مسار الاستيراد من اسم الوظيفة مقابل وظائف الشركة بعد قراءة الملف.
+    // نضع معرّفاً صالحاً مؤقتاً حتى يكتمل تحقق بقية حقول DTO هنا.
+    dto.jobTitleId = '00000000-0000-4000-8000-000000000000'
     const validation = await validate(dto)
     for (const issue of validation) {
       const label = importColumns.find(([key]) => key === issue.property)?.[1] ?? issue.property
