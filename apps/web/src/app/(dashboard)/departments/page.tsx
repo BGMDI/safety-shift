@@ -451,7 +451,13 @@ function JobsTab() {
   }
 
   const update = async (title: JobTitle) => {
-    await api.put(`/job-titles/${title.id}`, title).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
+    await api.put(`/job-titles/${title.id}`, {
+      name: title.name.trim(),
+      baseSalary: Number(title.baseSalary),
+      maxGrade: Number(title.maxGrade),
+      gradeIncrement: Number(title.gradeIncrement),
+      isShiftEligible: title.isShiftEligible,
+    }).catch(e => alert(e.response?.data?.message ?? 'خطأ'))
     setEditId(null); load()
   }
 
