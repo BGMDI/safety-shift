@@ -6,7 +6,7 @@ import { useAuth } from '../../../../../hooks/useAuth'
 
 interface SalaryData {
   employee: { fullName: string; employeeCode: string; jobTitle?: { name: string }; department?: { name: string }; hireDate: string }
-  components: { id: string; type: string; name: string; amount: number; effectiveDate: string; locked?: boolean }[]
+  components: { id: string; type: string; name: string; amount: number; effectiveDate: string; effectiveTo?: string | null; locked?: boolean; active?: boolean }[]
   summary: { base: number; allowances: number; deductions: number; net: number }
 }
 
@@ -35,7 +35,7 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
   const { id } = use(params)
   const router = useRouter()
   const [data, setData] = useState<SalaryData | null>(null)
-  const [form, setForm] = useState({ type: 'ALLOWANCE', name: '', amount: '', effectiveDate: new Date().toISOString().split('T')[0] })
+  const [form, setForm] = useState({ type: 'ALLOWANCE', name: '', amount: '', duration: 'MONTH', effectiveDate: new Date().toISOString().split('T')[0], effectiveTo: '' })
   const [loading, setLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showCertificate, setShowCertificate] = useState(false)
@@ -52,8 +52,11 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
     if (!form.name || !form.amount) return
     setLoading(true)
     try {
-      await api.post('/salary/component', { employeeId: id, type: form.type, name: form.name, amount: Number(form.amount), effectiveDate: form.effectiveDate })
-      setForm({ type: 'ALLOWANCE', name: '', amount: '', effectiveDate: new Date().toISOString().split('T')[0] })
+      const start = new Date(`${form.effectiveDate}T00:00:00`)
+      const monthEnd = new Date(start.getFullYear(), start.getMonth() + 1, 0)
+      const effectiveTo = form.duration === 'ONGOING' ? undefined : form.duration === 'MONTH' ? monthEnd.toISOString().split('T')[0] : form.effectiveTo
+      await api.post('/salary/component', { employeeId: id, type: form.type, name: form.name, amount: Number(form.amount), effectiveDate: form.effectiveDate, effectiveTo })
+      setForm({ type: 'ALLOWANCE', name: '', amount: '', duration: 'MONTH', effectiveDate: new Date().toISOString().split('T')[0], effectiveTo: '' })
       setShowForm(false)
       load()
     } catch (e: any) { alert(e.response?.data?.message) }
@@ -106,7 +109,7 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
         ${certificateType === 'salary' ? `<table>
           <thead><tr><th>المكوّن</th><th>النوع</th><th>المبلغ</th></tr></thead>
           <tbody>
-            ${(cert.components || []).map((c: any) => `<tr><td>${escapeHtml(c.name)}</td><td>${c.type === 'BASE' ? 'أساسي' : c.type === 'ALLOWANCE' ? 'بدل' : 'حسم'}</td><td>${Number(c.amount).toLocaleString('ar-SA')} ر.س</td></tr>`).join('')}
+            ${(cert.components || []).filter((c: any) => c.locked || c.active !== false).map((c: any) => `<tr><td>${escapeHtml(c.name)}</td><td>${c.type === 'BASE' ? 'أساسي' : c.type === 'ALLOWANCE' ? 'بدل' : 'حسم'}</td><td>${Number(c.amount).toLocaleString('ar-SA')} ر.س</td></tr>`).join('')}
             <tr class="total"><td colspan="2">الراتب الصافي</td><td>${Number(cert.summary?.net ?? 0).toLocaleString('ar-SA')} ر.س</td></tr>
           </tbody>
         </table>` : ''}
@@ -204,7 +207,7 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
         <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
           <h2 className="font-semibold mb-1">إضافة بدل أو حسم خاص بالموظف</h2>
           <p className="mb-4 text-xs text-slate-500">الراتب الأساسي وبدلات الوظيفة والتأمينات تأتي تلقائيًا من المسمى والدرجة.</p>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">النوع</label>
               <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} className={inp}>
@@ -221,12 +224,14 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
               <input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className={inp} />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">تاريخ السريان</label>
+              <label className="text-xs text-gray-500 mb-1 block">يبدأ من</label>
               <input type="date" value={form.effectiveDate} onChange={e => setForm({ ...form, effectiveDate: e.target.value })} className={inp} />
             </div>
+            <div><label className="text-xs text-gray-500 mb-1 block">مدة الاستحقاق</label><select value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} className={inp}><option value="MONTH">لهذا الشهر فقط</option><option value="UNTIL">حتى تاريخ محدد</option><option value="ONGOING">مستمر طوال العمل</option></select></div>
+            {form.duration === 'UNTIL' ? <div><label className="text-xs text-gray-500 mb-1 block">ينتهي في</label><input type="date" min={form.effectiveDate} required value={form.effectiveTo} onChange={e => setForm({ ...form, effectiveTo: e.target.value })} className={inp} /></div> : null}
           </div>
           <div className="flex gap-2">
-            <button onClick={add} disabled={loading || !form.name || !form.amount}
+            <button onClick={add} disabled={loading || !form.name || !form.amount || (form.duration === 'UNTIL' && !form.effectiveTo)}
               className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
               {loading ? 'جارٍ الحفظ...' : 'حفظ'}
             </button>
@@ -239,12 +244,12 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
-            <tr>{['المكوّن', 'النوع', 'المبلغ', 'تاريخ السريان', ''].map(h =>
+            <tr>{['المكوّن', 'النوع', 'المبلغ', 'مدة الاستحقاق', 'الحالة', ''].map(h =>
               <th key={h} className="text-right px-4 py-3 font-medium text-gray-600">{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y">
             {data.components.length === 0
-              ? <tr><td colSpan={5} className="text-center py-10 text-gray-400">لم يُعرّف سلم راتب لهذه الوظيفة بعد</td></tr>
+              ? <tr><td colSpan={6} className="text-center py-10 text-gray-400">لم يُعرّف سلم راتب لهذه الوظيفة بعد</td></tr>
               : data.components.map(c => (
                 <tr key={c.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium">{c.name}</td>
@@ -256,7 +261,8 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
                       {Number(c.amount).toLocaleString('ar-SA')} ر.س
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{c.locked ? 'مستمر' : new Date(c.effectiveDate).toLocaleDateString('ar-SA')}</td>
+                  <td className="px-4 py-3 text-gray-500">{c.locked ? 'مستمر' : c.effectiveTo ? `${new Date(c.effectiveDate).toLocaleDateString('ar-SA')} — ${new Date(c.effectiveTo).toLocaleDateString('ar-SA')}` : `من ${new Date(c.effectiveDate).toLocaleDateString('ar-SA')} ومستمر`}</td>
+                  <td className="px-4 py-3">{c.locked || c.active ? <span className="text-xs text-emerald-700">فعال</span> : <span className="text-xs text-slate-400">غير فعال</span>}</td>
                   <td className="px-4 py-3">
                     {c.locked ? <span className="text-xs text-slate-400">من سلم الوظيفة</span> : <button onClick={() => remove(c.id)} className="text-red-500 text-xs hover:underline">حذف</button>}
                   </td>

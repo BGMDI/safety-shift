@@ -66,7 +66,7 @@ export class PayrollService {
 
     const employees = await prisma.employee.findMany({
       where: { tenantId, status: 'ACTIVE' },
-      include: { salaryComponents: true, jobTitle: true },
+      include: { salaryComponents: { where: { effectiveDate: { lte: new Date(year, month, 0) }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(year, month - 1, 1) } }] } }, jobTitle: true },
     })
 
     const start = new Date(year, month - 1, 1)
@@ -84,12 +84,9 @@ export class PayrollService {
         ? Number(emp.jobTitle.baseSalary) + ((emp.jobGrade ?? 1) - 1) * Number(emp.jobTitle.gradeIncrement)
         : Number(base?.amount ?? 0)
       const baseSalary = emp.jobTitle ? grossSalary * Number(tenant.payrollBasicRate) / 100 : grossSalary
-      const customJobAllowances = Array.isArray(emp.jobTitle?.customAllowances) ? emp.jobTitle.customAllowances as { name: string; amount: number }[] : []
       const jobAllowances = emp.jobTitle ? [
         { name: 'بدل السكن', amount: grossSalary * Number(tenant.payrollHousingRate) / 100 },
         { name: 'بدل المواصلات', amount: grossSalary * Number(tenant.payrollTransportRate) / 100 },
-        { name: 'بدلات أخرى', amount: emp.jobTitle.otherAllowance },
-        ...customJobAllowances,
       ].filter(component => Number(component.amount) > 0) : []
       const allowanceComponents = [...jobAllowances, ...emp.salaryComponents.filter(c => c.type === 'ALLOWANCE')]
       const housingAllowance = allowanceComponents.filter(c => /سكن|housing/i.test(c.name)).reduce((s, c) => s + Number(c.amount), 0)

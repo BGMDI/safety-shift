@@ -17,7 +17,7 @@ export interface JobTitleImportRow {
   errors: string[]
 }
 
-const HEADERS = ['المسمى الوظيفي', 'عدد الدرجات', 'إجمالي راتب الدرجة الأولى', 'زيادة كل درجة', 'بدلات إضافية عامة', 'بدلات إضافية مسماة', 'يدخل في جدولة الشفتات'] as const
+const HEADERS = ['المسمى الوظيفي', 'عدد الدرجات', 'إجمالي راتب الدرجة الأولى', 'زيادة كل درجة', 'يدخل في جدولة الشفتات'] as const
 
 export async function jobTitlesTemplate() {
   const workbook = new Workbook()
@@ -31,11 +31,9 @@ export async function jobTitlesTemplate() {
     { header: HEADERS[1], key: 'maxGrade', width: 18 },
     { header: HEADERS[2], key: 'baseSalary', width: 22 },
     { header: HEADERS[3], key: 'gradeIncrement', width: 20 },
-    { header: HEADERS[4], key: 'otherAllowance', width: 24 },
-    { header: HEADERS[5], key: 'customAllowances', width: 38 },
-    { header: HEADERS[6], key: 'isShiftEligible', width: 30 },
+    { header: HEADERS[4], key: 'isShiftEligible', width: 30 },
   ]
-  sheet.autoFilter = 'A1:G1'
+  sheet.autoFilter = 'A1:E1'
   const header = sheet.getRow(1)
   header.height = 30
   header.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 }
@@ -44,7 +42,7 @@ export async function jobTitlesTemplate() {
   for (let row = 2; row <= 501; row++) {
     sheet.getRow(row).height = 23
     sheet.getRow(row).alignment = { vertical: 'middle', horizontal: 'right' }
-    sheet.getCell(`G${row}`).dataValidation = {
+    sheet.getCell(`E${row}`).dataValidation = {
       type: 'list', allowBlank: false, formulae: ['"نعم,لا"'],
       showErrorMessage: true, errorTitle: 'قيمة غير صحيحة', error: 'اختر نعم أو لا.',
     }
@@ -53,9 +51,8 @@ export async function jobTitlesTemplate() {
   sheet.getCell('B1').note = 'إلزامي. عدد صحيح من 1 إلى 100.'
   sheet.getCell('C1').note = 'إلزامي. يقسم النظام الإجمالي تلقائياً حسب النسب المحددة في صفحة الإعدادات.'
   sheet.getCell('D1').note = 'إلزامي. مبلغ الزيادة الثابتة عند الانتقال لكل درجة.'
-  sheet.getCell('F1').note = 'اختياري. مثال: بدل خطر:500|بدل موقع:300'
-  sheet.getCell('G1').note = 'إلزامي. القيم المقبولة: نعم أو لا.'
-  for (const column of [3, 4, 5]) sheet.getColumn(column).numFmt = '#,##0.00'
+  sheet.getCell('E1').note = 'إلزامي. القيم المقبولة: نعم أو لا.'
+  for (const column of [3, 4]) sheet.getColumn(column).numFmt = '#,##0.00'
   return workbook.xlsx.writeBuffer()
 }
 
@@ -95,30 +92,21 @@ export async function parseJobTitles(buffer: Buffer): Promise<JobTitleImportRow[
     const maxGradeText = get(HEADERS[1]).replace(/,/g, '')
     const salaryText = get(HEADERS[2]).replace(/,/g, '')
     const incrementText = get(HEADERS[3]).replace(/,/g, '')
-    const otherText = get(HEADERS[4]).replace(/,/g, '')
-    const customText = get(HEADERS[5])
-    const shiftText = get(HEADERS[6]).toLocaleLowerCase('ar')
+    const shiftText = get(HEADERS[4]).toLocaleLowerCase('ar')
     if (!errors.length && !name && !maxGradeText && !salaryText && !shiftText) continue
     if (!name) errors.push('المسمى الوظيفي: حقل إلزامي')
     const maxGrade = Number(maxGradeText)
     if (!Number.isInteger(maxGrade) || maxGrade < 1 || maxGrade > 100) errors.push('عدد الدرجات: يجب أن يكون عدداً صحيحاً من 1 إلى 100')
     const baseSalary = salaryText === '' ? null : Number(salaryText)
-    const amounts = [incrementText, otherText].map(value => value === '' ? null : Number(value))
+    const amounts = [incrementText].map(value => value === '' ? null : Number(value))
     if (baseSalary === null || !Number.isFinite(baseSalary) || baseSalary < 0) errors.push('إجمالي راتب الدرجة الأولى: أدخل رقماً صفراً أو أكبر')
-    ;['زيادة كل درجة', 'بدلات إضافية عامة'].forEach((label, index) => {
+    ;['زيادة كل درجة'].forEach((label, index) => {
       if (amounts[index] === null || !Number.isFinite(amounts[index]) || amounts[index]! < 0) errors.push(`${label}: أدخل رقماً صفراً أو أكبر`)
     })
-    const customAllowances: { name: string; amount: number }[] = []
-    if (customText) for (const part of customText.split('|')) {
-      const [allowanceName, amountText] = part.split(':').map(value => value?.trim())
-      const amount = Number(amountText)
-      if (!allowanceName || !Number.isFinite(amount) || amount < 0) errors.push(`بدلات إضافية: الصيغة الصحيحة اسم البدل:المبلغ، وافصل بينها بعلامة |`)
-      else customAllowances.push({ name: allowanceName, amount })
-    }
     const yes = ['نعم', 'yes', 'true', '1'].includes(shiftText)
     const no = ['لا', 'no', 'false', '0'].includes(shiftText)
     if (!yes && !no) errors.push('جدولة الشفتات: اختر نعم أو لا')
-    rows.push({ row: rowNumber, name, grade: 'الدرجة 1', baseSalary, maxGrade, gradeIncrement: amounts[0], housingAllowance: 0, transportAllowance: 0, otherAllowance: amounts[1], insuranceRate: 0, customAllowances, isShiftEligible: yes ? true : no ? false : null, errors })
+    rows.push({ row: rowNumber, name, grade: 'الدرجة 1', baseSalary, maxGrade, gradeIncrement: amounts[0], housingAllowance: 0, transportAllowance: 0, otherAllowance: 0, insuranceRate: 0, customAllowances: [], isShiftEligible: yes ? true : no ? false : null, errors })
   }
   if (!rows.length) throw new BadRequestException('الملف لا يحتوي على مسميات وظيفية')
   return rows

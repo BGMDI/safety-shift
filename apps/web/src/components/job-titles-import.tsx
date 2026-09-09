@@ -65,7 +65,7 @@ export function JobTitlesImport({ onImported }: { onImported: () => void }) {
     </button>
     {open ? <div className="section-body space-y-5">
       <div className="info-panel">
-        نزّل القالب ثم أدخل المسمى وسلم الدرجات وإجمالي الراتب. يقسم النظام الإجمالي تلقائيًا حسب نسب الأساسي والسكن والمواصلات المحددة في صفحة الإعدادات.
+        نزّل القالب ثم أدخل المسمى وسلم الدرجات وإجمالي الراتب. أما البدلات الإضافية فتُضاف للموظف بمدة محددة من صفحة راتبه.
       </div>
       <div className="flex flex-wrap gap-3 items-center">
         <button type="button" onClick={downloadTemplate} disabled={busy} className="btn-secondary"><Download size={17} /> تنزيل القالب</button>

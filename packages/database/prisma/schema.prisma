@@ -301,6 +301,7 @@ model SalaryComponent {
   amount        Decimal             @db.Decimal(10, 2)
   isPercentage  Boolean             @default(false)
   effectiveDate DateTime
+  effectiveTo   DateTime?
 
   employee      Employee @relation(fields: [employeeId], references: [id])
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { prisma } from '@shift-saas/database'
 import { CreateSalaryComponentDto, UpdateSalaryComponentDto } from './dto/salary.dto'
 
@@ -16,6 +16,8 @@ export class SalaryService {
       where: { employeeId, tenantId },
       orderBy: [{ type: 'asc' }, { effectiveDate: 'desc' }],
     })
+    const today = new Date()
+    const activeComponents = components.filter(component => component.effectiveDate <= today && (!component.effectiveTo || component.effectiveTo >= today))
 
     const job = employee.jobTitle
     const grade = employee.jobGrade ?? 1
@@ -26,30 +28,28 @@ export class SalaryService {
     const jobBase = jobGross * basicRate / 100
     const housingAllowance = jobGross * housingRate / 100
     const transportAllowance = jobGross * transportRate / 100
-    const custom = Array.isArray(job?.customAllowances) ? job.customAllowances as { name: string; amount: number }[] : []
     const jobComponents = job ? [
       { id: 'job:base', type: 'BASE', name: `الراتب الأساسي ${basicRate}% — الدرجة ${grade}`, amount: jobBase, effectiveDate: '', locked: true },
       { id: 'job:housing', type: 'ALLOWANCE', name: `بدل السكن ${housingRate}%`, amount: housingAllowance, effectiveDate: '', locked: true },
       { id: 'job:transport', type: 'ALLOWANCE', name: `بدل المواصلات ${transportRate}%`, amount: transportAllowance, effectiveDate: '', locked: true },
-      { id: 'job:other', type: 'ALLOWANCE', name: 'بدلات أخرى', amount: Number(job.otherAllowance), effectiveDate: '', locked: true },
-      ...custom.map((item, index) => ({ id: `job:custom:${index}`, type: 'ALLOWANCE', name: item.name, amount: Number(item.amount), effectiveDate: '', locked: true })),
     ].filter(component => component.type === 'BASE' || component.amount > 0) : []
-    const manualBase = components.filter(c => c.type === 'BASE').reduce((s, c) => s + Number(c.amount), 0)
+    const manualBase = activeComponents.filter(c => c.type === 'BASE').reduce((s, c) => s + Number(c.amount), 0)
     const base = job ? jobBase : manualBase
     const jobAllowances = jobComponents.filter(c => c.type === 'ALLOWANCE').reduce((sum, component) => sum + component.amount, 0)
-    const allowances = jobAllowances + components.filter(c => c.type === 'ALLOWANCE').reduce((s, c) => s + Number(c.amount), 0)
+    const allowances = jobAllowances + activeComponents.filter(c => c.type === 'ALLOWANCE').reduce((s, c) => s + Number(c.amount), 0)
     const insuranceRate = Number(employee.tenant.payrollInsuranceRate)
     const insuranceDeduction = job ? jobGross * insuranceRate / 100 : 0
     if (insuranceDeduction > 0) jobComponents.push({ id: 'job:insurance', type: 'DEDUCTION', name: `استقطاع التأمينات (${insuranceRate}٪)`, amount: insuranceDeduction, effectiveDate: '', locked: true })
-    const manualDeductions = components.filter(c => c.type === 'DEDUCTION' && (insuranceDeduction <= 0 || !/تأمين|gosi|insurance/i.test(c.name)))
+    const manualDeductions = activeComponents.filter(c => c.type === 'DEDUCTION' && (insuranceDeduction <= 0 || !/تأمين|gosi|insurance/i.test(c.name)))
     const deductions = insuranceDeduction + manualDeductions.reduce((s, c) => s + Number(c.amount), 0)
 
-    return { employee, components: [...jobComponents, ...components.filter(c => (c.type !== 'BASE' || !job) && (insuranceDeduction <= 0 || !/تأمين|gosi|insurance/i.test(c.name)))], summary: { base, allowances, deductions, net: base + allowances - deductions } }
+    return { employee, components: [...jobComponents, ...components.filter(c => (c.type !== 'BASE' || !job) && (insuranceDeduction <= 0 || !/تأمين|gosi|insurance/i.test(c.name))).map(component => ({ ...component, active: component.effectiveDate <= today && (!component.effectiveTo || component.effectiveTo >= today) }))], summary: { base, allowances, deductions, net: base + allowances - deductions } }
   }
 
   async addComponent(tenantId: string, dto: CreateSalaryComponentDto) {
     const employee = await prisma.employee.findFirst({ where: { id: dto.employeeId, tenantId } })
     if (!employee) throw new NotFoundException('الموظف غير موجود')
+    if (dto.effectiveTo && new Date(dto.effectiveTo) < new Date(dto.effectiveDate)) throw new BadRequestException('تاريخ نهاية الاستحقاق يجب أن يكون بعد تاريخ البداية')
 
     return prisma.salaryComponent.create({
       data: {
@@ -60,6 +60,7 @@ export class SalaryService {
         amount: dto.amount,
         isPercentage: dto.isPercentage ?? false,
         effectiveDate: new Date(dto.effectiveDate),
+        effectiveTo: dto.effectiveTo ? new Date(dto.effectiveTo) : null,
       },
     })
   }
@@ -67,7 +68,10 @@ export class SalaryService {
   async updateComponent(tenantId: string, id: string, dto: UpdateSalaryComponentDto) {
     const comp = await prisma.salaryComponent.findFirst({ where: { id, tenantId } })
     if (!comp) throw new NotFoundException('البند غير موجود')
-    return prisma.salaryComponent.update({ where: { id }, data: dto })
+    const effectiveDate = dto.effectiveDate ? new Date(dto.effectiveDate) : comp.effectiveDate
+    const effectiveTo = dto.effectiveTo ? new Date(dto.effectiveTo) : comp.effectiveTo
+    if (effectiveTo && effectiveTo < effectiveDate) throw new BadRequestException('تاريخ نهاية الاستحقاق يجب أن يكون بعد تاريخ البداية')
+    return prisma.salaryComponent.update({ where: { id }, data: { ...dto, effectiveDate: dto.effectiveDate ? effectiveDate : undefined, effectiveTo: dto.effectiveTo ? effectiveTo : undefined } })
   }
 
   async removeComponent(tenantId: string, id: string) {

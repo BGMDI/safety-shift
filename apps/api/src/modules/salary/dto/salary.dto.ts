@@ -21,10 +21,15 @@ export class CreateSalaryComponentDto {
 
   @IsDateString()
   effectiveDate!: string
+
+  @IsOptional()
+  @IsDateString()
+  effectiveTo?: string
 }
 
 export class UpdateSalaryComponentDto {
   @IsOptional() @Type(() => Number) @IsNumber() amount?: number
   @IsOptional() @IsBoolean() isPercentage?: boolean
   @IsOptional() @IsDateString() effectiveDate?: string
+  @IsOptional() @IsDateString() effectiveTo?: string
 }
