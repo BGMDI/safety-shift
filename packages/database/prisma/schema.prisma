@@ -19,6 +19,8 @@ model Tenant {
   employmentCertificateText String?          @db.Text
   certificateSignature      String?
   certificateStamp          String?
+  certificateHeader         String?
+  certificateFooter         String?
   plan              SubscriptionPlan @default(TRIAL)
   planStatus        PlanStatus       @default(TRIAL)
   stripeCustomerId  String?          @unique

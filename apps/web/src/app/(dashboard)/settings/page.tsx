@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { FileSignature, ImageUp, Save, Stamp } from 'lucide-react'
+import { Eye, FileSignature, ImageUp, LayoutPanelTop, Save, Stamp } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth'
 import { api } from '../../../lib/api'
 import { isHR } from '../../../lib/auth'
@@ -17,6 +17,8 @@ interface Settings {
   employmentCertificateText: string | null
   certificateSignature: string | null
   certificateStamp: string | null
+  certificateHeader: string | null
+  certificateFooter: string | null
 }
 
 export default function SettingsPage() {
@@ -27,6 +29,7 @@ export default function SettingsPage() {
   const [employmentText, setEmploymentText] = useState(DEFAULT_EMPLOYMENT)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [previewType, setPreviewType] = useState<'salary' | 'employment'>('salary')
 
   useEffect(() => {
     setAllowed(isHR())
@@ -49,7 +52,7 @@ export default function SettingsPage() {
     finally { setSaving(false) }
   }
 
-  async function upload(kind: 'signature' | 'stamp', file?: File) {
+  async function upload(kind: 'signature' | 'stamp' | 'header' | 'footer', file?: File) {
     if (!file) return
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 3 * 1024 * 1024) {
       setMessage('اختر صورة PNG أو JPG أو WebP بحجم لا يتجاوز 3 ميجابايت'); return
@@ -58,7 +61,8 @@ export default function SettingsPage() {
     const body = new FormData(); body.append('file', file)
     try {
       const { data } = await api.post<Settings>(`/tenants/certificate-assets/${kind}`, body)
-      setSettings(data); setMessage(kind === 'signature' ? 'تم حفظ التوقيع' : 'تم حفظ الختم')
+      const labels = { signature: 'التوقيع', stamp: 'الختم', header: 'الهيدر', footer: 'الفوتر' }
+      setSettings(data); setMessage(`تم حفظ ${labels[kind]}`)
     } catch (e: any) { setMessage(e.response?.data?.message ?? 'تعذر رفع الصورة') }
   }
 
@@ -66,14 +70,14 @@ export default function SettingsPage() {
   if (!settings) return <div className="p-6 text-gray-500">جارٍ تحميل الإعدادات…</div>
 
   return (
-    <main className="p-6 max-w-5xl mx-auto">
+    <main className="p-6 max-w-7xl mx-auto">
       <header className="mb-7">
         <p className="text-blue-600 text-sm font-bold mb-2">شؤون الموظفين</p>
         <h1 className="text-3xl font-black text-gray-900">قوالب التعاريف الرسمية</h1>
         <p className="text-gray-500 mt-2">اضبط الصياغة المعتمدة والتوقيع والختم مرة واحدة، وسيستخدمها النظام عند طباعة أي تعريف.</p>
       </header>
 
-      <div className="grid lg:grid-cols-[1fr_300px] gap-5 items-start">
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
         <section className="space-y-5">
           <TemplateEditor title="تعريف بالراتب" value={salaryText} onChange={setSalaryText} />
           <TemplateEditor title="تعريف بدون راتب" value={employmentText} onChange={setEmploymentText} />
@@ -83,13 +87,32 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <aside className="bg-white border rounded-2xl p-5 shadow-sm lg:sticky lg:top-6">
-          <h2 className="font-black mb-1">اعتماد الخطاب</h2>
-          <p className="text-xs text-gray-500 mb-5">يفضّل استخدام PNG بخلفية شفافة.</p>
-          <AssetUpload title="التوقيع" icon={<FileSignature size={18} />} url={settings.certificateSignature} onChange={file => upload('signature', file)} />
-          <AssetUpload title="الختم" icon={<Stamp size={18} />} url={settings.certificateStamp} onChange={file => upload('stamp', file)} />
+        <aside className="space-y-5 xl:sticky xl:top-6">
+          <section className="wardiya-section p-5">
+            <h2 className="font-black mb-1">هوية الخطاب</h2>
+            <p className="text-xs text-gray-500 mb-5">استخدم صورًا أفقية واضحة للهيدر والفوتر، وPNG شفافًا للتوقيع والختم.</p>
+            <AssetUpload title="هيدر الخطاب" hint="مقترح 1600 × 240 بكسل" icon={<LayoutPanelTop size={18} />} url={settings.certificateHeader} wide onChange={file => upload('header', file)} />
+            <AssetUpload title="فوتر الخطاب" hint="مقترح 1600 × 180 بكسل" icon={<LayoutPanelTop size={18} className="rotate-180" />} url={settings.certificateFooter} wide onChange={file => upload('footer', file)} />
+            <div className="grid grid-cols-2 gap-3">
+              <AssetUpload title="التوقيع" icon={<FileSignature size={18} />} url={settings.certificateSignature} compact onChange={file => upload('signature', file)} />
+              <AssetUpload title="الختم" icon={<Stamp size={18} />} url={settings.certificateStamp} compact onChange={file => upload('stamp', file)} />
+            </div>
+          </section>
         </aside>
       </div>
+
+      <section className="wardiya-section mt-6 overflow-hidden">
+        <div className="p-5 border-b flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3"><span className="section-icon"><Eye size={20} /></span><div><h2 className="font-black">معاينة الخطاب</h2><p className="text-xs text-gray-500 mt-1">تتحدث المعاينة مباشرة أثناء تعديل النص أو رفع الصور.</p></div></div>
+          <div className="flex bg-gray-100 rounded-xl p-1">
+            <button onClick={() => setPreviewType('salary')} className={`px-4 py-2 rounded-lg text-xs font-bold ${previewType === 'salary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>تعريف بالراتب</button>
+            <button onClick={() => setPreviewType('employment')} className={`px-4 py-2 rounded-lg text-xs font-bold ${previewType === 'employment' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>بدون راتب</button>
+          </div>
+        </div>
+        <div className="p-4 sm:p-7 bg-slate-100 overflow-auto">
+          <CertificatePreview settings={settings} type={previewType} text={previewType === 'salary' ? salaryText : employmentText} />
+        </div>
+      </section>
     </main>
   )
 }
@@ -102,10 +125,32 @@ function TemplateEditor({ title, value, onChange }: { title: string; value: stri
   </article>
 }
 
-function AssetUpload({ title, icon, url, onChange }: { title: string; icon: React.ReactNode; url: string | null; onChange: (file?: File) => void }) {
-  return <label className="block border rounded-xl p-3 mb-3 cursor-pointer hover:border-blue-400 transition">
-    <span className="flex items-center gap-2 font-bold text-sm mb-3">{icon}{title}<ImageUp size={15} className="mr-auto text-blue-600" /></span>
-    {url ? <img src={`${API_URL}${url}`} alt={title} className="h-24 w-full object-contain bg-gray-50 rounded-lg" /> : <span className="h-20 grid place-items-center rounded-lg bg-gray-50 text-xs text-gray-400">اختياري · اضغط للرفع</span>}
+function AssetUpload({ title, hint, icon, url, wide = false, compact = false, onChange }: { title: string; hint?: string; icon: React.ReactNode; url: string | null; wide?: boolean; compact?: boolean; onChange: (file?: File) => void }) {
+  return <label className={`block border rounded-xl p-3 cursor-pointer hover:border-blue-400 transition ${wide ? 'mb-3' : ''}`}>
+    <span className="flex items-center gap-2 font-bold text-xs mb-2">{icon}{title}<ImageUp size={14} className="mr-auto text-blue-600" /></span>
+    {hint ? <small className="block text-[10px] text-gray-400 mb-2">{hint}</small> : null}
+    {url ? <img src={`${API_URL}${url}`} alt={title} className={`${compact ? 'h-16' : wide ? 'h-20' : 'h-24'} w-full object-contain bg-gray-50 rounded-lg`} /> : <span className={`${compact ? 'h-16' : 'h-20'} grid place-items-center rounded-lg bg-gray-50 text-[10px] text-gray-400 text-center px-2`}>اضغط للرفع</span>}
     <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={e => onChange(e.target.files?.[0])} />
   </label>
+}
+
+function CertificatePreview({ settings, type, text }: { settings: Settings; type: 'salary' | 'employment'; text: string }) {
+  const fields: Record<string, string> = {
+    '{اسم_الشركة}': settings.name, '{اسم_الموظف}': 'محمد أحمد العتيبي', '{الرقم_الوظيفي}': 'WRD-1024',
+    '{رقم_الهوية}': '10XXXXXXXX', '{الجنسية}': 'سعودي', '{المسمى_الوظيفي}': 'أخصائي موارد بشرية',
+    '{القسم}': 'الموارد البشرية', '{الفرع}': 'المقر الرئيسي', '{تاريخ_التعيين}': '١٤٤٦/٠١/١٥',
+    '{تاريخ_الإصدار}': new Date().toLocaleDateString('ar-SA'), '{الجهة}': 'إلى من يهمه الأمر',
+  }
+  let preview = text
+  for (const [key, value] of Object.entries(fields)) preview = preview.replaceAll(key, value)
+  const url = (path: string | null) => path ? `${API_URL}${path}` : ''
+  return <article className="relative bg-white text-slate-900 mx-auto w-[794px] min-h-[1040px] shadow-xl border border-slate-200 px-16 pt-10 pb-28" dir="rtl">
+    {settings.certificateHeader ? <img src={url(settings.certificateHeader)} alt="هيدر الخطاب" className="w-full h-28 object-contain object-top mb-5" /> : <header className="flex items-center justify-between border-b-[3px] border-blue-500 pb-5"><div><strong className="text-xl">{settings.name}</strong><p className="text-xs text-slate-500 mt-2">التاريخ: {new Date().toLocaleDateString('ar-SA')}<br />الرقم الوظيفي: WRD-1024</p></div>{settings.logo ? <img src={url(settings.logo)} alt="شعار الشركة" className="w-24 h-16 object-contain" /> : null}</header>}
+    <h1 className="text-center text-2xl font-black mt-9">{type === 'salary' ? 'تعريف بالراتب' : 'تعريف موظف'}</h1>
+    <p className="text-center text-sm text-slate-600 mt-2 mb-8">إلى: <strong>إلى من يهمه الأمر</strong></p>
+    <p className="text-[15px] leading-9 text-justify whitespace-pre-wrap min-h-44">{preview}</p>
+    {type === 'salary' ? <table className="w-full text-sm mt-6 border-collapse"><tbody><tr><td className="border p-3">الراتب الأساسي</td><td className="border p-3">٨٬٠٠٠ ر.س</td></tr><tr><td className="border p-3">إجمالي البدلات</td><td className="border p-3">٢٬٠٠٠ ر.س</td></tr><tr className="bg-blue-50 font-bold"><td className="border p-3">الراتب الصافي</td><td className="border p-3">٩٬٢٥٠ ر.س</td></tr></tbody></table> : null}
+    <div className="mt-12 mr-auto w-64 text-center"><strong className="text-sm">إدارة شؤون الموظفين</strong><div className="h-24 flex items-center justify-center gap-2">{settings.certificateSignature ? <img src={url(settings.certificateSignature)} alt="التوقيع" className="max-w-28 max-h-20 object-contain" /> : null}{settings.certificateStamp ? <img src={url(settings.certificateStamp)} alt="الختم" className="max-w-28 max-h-20 object-contain" /> : null}</div></div>
+    <footer className="absolute bottom-5 left-16 right-16">{settings.certificateFooter ? <img src={url(settings.certificateFooter)} alt="فوتر الخطاب" className="w-full h-20 object-contain object-bottom" /> : <p className="border-t pt-2 text-center text-[10px] text-slate-500">صدر هذا التعريف إلكترونيًا من نظام وردية لصالح {settings.name}</p>}</footer>
+  </article>
 }

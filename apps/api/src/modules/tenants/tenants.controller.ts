@@ -61,8 +61,8 @@ export class TenantsController {
     @Param('kind') kind: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    if (kind !== 'signature' && kind !== 'stamp') throw new BadRequestException('نوع المرفق غير صحيح')
+    if (!['signature', 'stamp', 'header', 'footer'].includes(kind)) throw new BadRequestException('نوع المرفق غير صحيح')
     if (!file) throw new BadRequestException('اختر صورة للرفع')
-    return this.svc.updateCertificateAsset(user.tenantId, kind, `/uploads/certificates/${file.filename}`)
+    return this.svc.updateCertificateAsset(user.tenantId, kind as 'signature' | 'stamp' | 'header' | 'footer', `/uploads/certificates/${file.filename}`)
   }
 }
