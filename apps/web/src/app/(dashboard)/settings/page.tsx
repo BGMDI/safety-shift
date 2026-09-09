@@ -165,8 +165,8 @@ function CertificatePreview({ settings, type, text, signerName, signerTitle }: {
   const url = (path: string | null) => path ? `${API_URL}${path}` : ''
   return <article className="relative bg-white text-slate-900 mx-auto w-[794px] min-h-[1040px] shadow-xl border border-slate-200 px-16 pt-10 pb-28" dir="rtl">
     {settings.certificateHeader ? <img src={url(settings.certificateHeader)} alt="هيدر الخطاب" className="w-full h-28 object-contain object-top" /> : <header className="flex items-center justify-between border-b-[3px] border-blue-500 pb-5"><strong className="text-xl">{settings.name}</strong>{settings.logo ? <img src={url(settings.logo)} alt="شعار الشركة" className="w-24 h-16 object-contain" /> : null}</header>}
-    <div className="mt-4 flex items-center justify-between border-b border-slate-200 pb-3 text-xs text-slate-500"><span>التاريخ: {new Date().toLocaleDateString('ar-SA')}</span><span>الرقم الوظيفي: WRD-1024</span></div>
-    <h1 className="text-center text-2xl font-black mt-9">{type === 'salary' ? 'إفادة' : 'تعريف موظف'}</h1>
+    <div className="mt-4 text-xs text-slate-500">التاريخ: {new Date().toLocaleDateString('ar-SA')}</div>
+    <h1 className="text-center text-2xl font-black mt-9">إفادة</h1>
     <p className="text-center text-sm text-slate-600 mt-2 mb-8">إلى: <strong>إلى من يهمه الأمر</strong></p>
     <p className="text-[15px] leading-9 text-justify whitespace-pre-wrap min-h-44">{preview}</p>
     {type === 'salary' ? <table className="w-full text-sm mt-6 border-collapse"><tbody><tr><td className="border p-3">الراتب الأساسي</td><td className="border p-3">٨٬٠٠٠ ر.س</td></tr><tr><td className="border p-3">إجمالي البدلات</td><td className="border p-3">٢٬٠٠٠ ر.س</td></tr><tr className="bg-blue-50 font-bold"><td className="border p-3">الراتب الصافي</td><td className="border p-3">٩٬٢٥٠ ر.س</td></tr></tbody></table> : null}

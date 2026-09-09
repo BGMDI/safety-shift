@@ -95,12 +95,12 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
       if (!win) throw new Error('popup blocked')
       win.document.write(`
         <!DOCTYPE html><html lang="ar" dir="rtl">
-        <head><meta charset="UTF-8"><title>${certificateType === 'salary' ? 'إفادة' : 'تعريف موظف'}</title>
-        <style>@page{size:A4;margin:12mm 18mm 18mm}*{box-sizing:border-box}body{font-family:Arial;color:#0b2135;direction:rtl;margin:0;padding-bottom:${footer ? '86px' : '30px'}}.letterhead{width:100%;height:105px;object-fit:contain;object-position:center top}.head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1e90ff;padding-bottom:18px}.head img{width:100px;height:70px;object-fit:contain}.company{font-size:22px;font-weight:bold}.document-meta{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-bottom:10px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b}.ref{font-size:12px;color:#64748b;line-height:1.8}.title{text-align:center;margin:34px 0 8px;font-size:25px}.to{text-align:center;color:#334155;margin-bottom:30px}.body{font-size:16px;line-height:2.25;text-align:justify;min-height:180px}table{width:100%;border-collapse:collapse;margin:24px 0}td,th{border:1px solid #cbd5e1;padding:10px;text-align:right}.total{font-weight:bold;background:#eff6ff}.approval{margin-top:45px;display:flex;justify-content:flex-end}.approval-box{text-align:center;min-width:260px}.assets{height:105px;display:flex;align-items:center;justify-content:center;gap:5px}.assets img{max-width:125px;max-height:100px;object-fit:contain}.footer{position:fixed;bottom:0;left:0;right:0;text-align:center;color:#64748b}.footer img{width:100%;height:75px;object-fit:contain;object-position:center bottom}.footer-text{border-top:1px solid #cbd5e1;padding-top:8px;font-size:10px}</style>
+        <head><meta charset="UTF-8"><title>إفادة</title>
+        <style>@page{size:A4;margin:12mm 18mm 18mm}*{box-sizing:border-box}body{font-family:Arial;color:#0b2135;direction:rtl;margin:0;padding-bottom:${footer ? '86px' : '30px'}}.letterhead{width:100%;height:105px;object-fit:contain;object-position:center top}.head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1e90ff;padding-bottom:18px}.head img{width:100px;height:70px;object-fit:contain}.company{font-size:22px;font-weight:bold}.document-meta{margin-top:14px;font-size:12px;color:#64748b}.ref{font-size:12px;color:#64748b;line-height:1.8}.title{text-align:center;margin:34px 0 8px;font-size:25px}.to{text-align:center;color:#334155;margin-bottom:30px}.body{font-size:16px;line-height:2.25;text-align:justify;min-height:180px}table{width:100%;border-collapse:collapse;margin:24px 0}td,th{border:1px solid #cbd5e1;padding:10px;text-align:right}.total{font-weight:bold;background:#eff6ff}.approval{margin-top:45px;display:flex;justify-content:flex-end}.approval-box{text-align:center;min-width:260px}.assets{height:105px;display:flex;align-items:center;justify-content:center;gap:5px}.assets img{max-width:125px;max-height:100px;object-fit:contain}.footer{position:fixed;bottom:0;left:0;right:0;text-align:center;color:#64748b}.footer img{width:100%;height:75px;object-fit:contain;object-position:center bottom}.footer-text{border-top:1px solid #cbd5e1;padding-top:8px;font-size:10px}</style>
         </head><body>
         ${header ? `<img class="letterhead" src="${escapeHtml(header)}" alt="ترويسة الخطاب">` : `<header class="head"><div class="company">${escapeHtml(cert.tenant?.name ?? 'الشركة')}</div>${logo ? `<img src="${escapeHtml(logo)}" alt="شعار الشركة">` : ''}</header>`}
-        <div class="document-meta"><span>التاريخ: ${new Date().toLocaleDateString('ar-SA')}</span><span>الرقم الوظيفي: ${escapeHtml(cert.employee?.employeeCode)}</span></div>
-        <h1 class="title">${certificateType === 'salary' ? 'إفادة' : 'تعريف موظف'}</h1>
+        <div class="document-meta">التاريخ: ${new Date().toLocaleDateString('ar-SA')}</div>
+        <h1 class="title">إفادة</h1>
         <p class="to">إلى: <strong>${escapeHtml(recipient.trim())}</strong></p>
         <div class="body">${body}</div>
         ${certificateType === 'salary' ? `<table>
@@ -174,7 +174,7 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
       {/* Actions */}
       <div className="flex gap-3 mb-6">
         <button onClick={() => setShowCertificate(true)} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2">
-          🖨️ إصدار تعريف
+          🖨️ إصدار إفادة
         </button>
         <button onClick={printJobCard} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2">
           🪪 طباعة البطاقة الوظيفية
@@ -186,14 +186,15 @@ export default function EmployeeSalaryPage({ params }: { params: Promise<{ id: s
 
       {showCertificate ? <div className="fixed inset-0 z-50 bg-slate-950/50 grid place-items-center p-4" role="dialog" aria-modal="true" aria-labelledby="certificate-title">
         <section className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
-          <h2 id="certificate-title" className="text-xl font-black mb-1">إصدار تعريف رسمي</h2>
-          <p className="text-sm text-gray-500 mb-5">اختر نوع الخطاب وحدد الجهة الموجه لها قبل الطباعة.</p>
+          <h2 id="certificate-title" className="text-xl font-black mb-1">إصدار إفادة رسمية</h2>
+          <p className="text-sm text-gray-500 mb-5">اختر نوع الإفادة ثم اكتب اسم الجهة التي ستُوجّه إليها.</p>
           <div className="grid grid-cols-2 gap-3 mb-5">
             <button type="button" onClick={() => setCertificateType('salary')} className={`border rounded-xl p-4 text-right ${certificateType === 'salary' ? 'border-blue-600 bg-blue-50 text-blue-800' : ''}`}><strong className="block">إفادة</strong><span className="text-xs">تتضمن تفاصيل الراتب والصافي</span></button>
             <button type="button" onClick={() => setCertificateType('employment')} className={`border rounded-xl p-4 text-right ${certificateType === 'employment' ? 'border-blue-600 bg-blue-50 text-blue-800' : ''}`}><strong className="block">تعريف بدون راتب</strong><span className="text-xs">يثبت العمل والمسمى فقط</span></button>
           </div>
-          <label className="block text-sm font-bold mb-2" htmlFor="certificate-recipient">الجهة الموجه لها التعريف *</label>
-          <input id="certificate-recipient" autoFocus maxLength={150} value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="مثال: إلى من يهمه الأمر، البنك الأهلي…" className="w-full border rounded-xl px-4 py-3 mb-5 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          <label className="block text-sm font-bold mb-2" htmlFor="certificate-recipient">اسم الجهة الموجه لها الإفادة *</label>
+          <input id="certificate-recipient" autoFocus required maxLength={150} value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="مثال: البنك الأهلي السعودي" className="w-full border rounded-xl px-4 py-3 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          <p className="mb-5 text-xs text-slate-500">سيظهر اسم الجهة أعلى نص الإفادة وداخل القالب عند استخدام الحقل {'{الجهة}'}.</p>
           <div className="flex gap-3 justify-end"><button type="button" onClick={() => setShowCertificate(false)} className="px-4 py-2 text-gray-600">إلغاء</button><button type="button" onClick={printCertificate} disabled={!recipient.trim() || certificateLoading} className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold disabled:opacity-40">{certificateLoading ? 'جارٍ التجهيز…' : 'معاينة وطباعة'}</button></div>
         </section>
       </div> : null}
